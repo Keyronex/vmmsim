@@ -26,7 +26,7 @@ main(int argc, char *arv[])
 	printf("Wiring round 1\n");
 	struct vmp_pte_wire_state state;
 	vmp_wire_pte(&proc, 0x0, &state);
-	vmp_pte_wire_state_release(&state);
+	//vmp_pte_wire_state_release(&state);
 	vm_dump_pages();
 
 	printf("Wiring round 2\n");
