@@ -8,17 +8,7 @@
 static bool
 page_is_root_table(vm_page_t *page)
 {
-	return page->use == (kPageUsePML1 + (1 - VMP_TABLE_LEVELS));
-}
-
-static void
-vmp_wsl_lock_entry(vaddr_t vaddr)
-{
-}
-
-static void
-vmp_wsl_unlock_entry(vaddr_t vaddr)
-{
+	return page->use == (kPageUsePML1 + (VMP_TABLE_LEVELS - 1));
 }
 
 /*!
@@ -29,16 +19,18 @@ vmp_wsl_unlock_entry(vaddr_t vaddr)
  *
  * @param is_new Whether the nonswap PTE is brand new (replacing a zero PTE; if
  * so, used_ptes count must be increased as well as nonswap_ptes.)
+ *
+ * @pre ps->ws_lock held
  */
 static void
-vmp_pagetable_page_nonswap_pte_created(vm_page_t *page, bool is_new)
+vmp_pagetable_page_nonswap_pte_created(eprocess_t *ps, vm_page_t *page,
+    bool is_new)
 {
 	vmp_page_retain_locked(page);
 	if (is_new)
 		page->used_ptes++;
-	if (page->nonswap_ptes++ == 0 &&
-	    page->use != kPageUsePML1 + (1 - VMP_TABLE_LEVELS)) {
-		vmp_wsl_lock_entry(P2V(vmp_page_paddr(page)));
+	if (page->nonswap_ptes++ == 0 && !page_is_root_table(page)) {
+		vmp_wsl_lock_entry(ps, P2V(vmp_page_paddr(page)));
 	}
 }
 
@@ -48,9 +40,12 @@ vmp_pagetable_page_nonswap_pte_created(vm_page_t *page, bool is_new)
  * This will amend the PFNDB entry's nonswap and nonzero PTE count, and if the
  * new nonzero PTE count is zero, delete the page. If the new nonswap PTE count
  * is zero, the page will be unlocked from its owning process' working set.
+ *
+ * @pre ps->ws_lock held
  */
 static void
-vmp_pagetable_page_pte_deleted(vm_page_t *page, bool was_swap)
+vmp_pagetable_page_pte_deleted(struct eprocess *ps, vm_page_t *page,
+    bool was_swap)
 {
 	if (page->used_ptes-- == 1) {
 		kfatal("delete this page\n");
@@ -58,16 +53,16 @@ vmp_pagetable_page_pte_deleted(vm_page_t *page, bool was_swap)
 	}
 	if (!was_swap && page->nonswap_ptes-- == 1 &&
 	    !page_is_root_table(page)) {
-		vmp_wsl_unlock_entry(P2V(vmp_page_paddr(page)));
+		vmp_wsl_unlock_entry(ps, P2V(vmp_page_paddr(page)));
 	}
 	vmp_page_release_locked(page);
 }
 
 static void
-vmp_md_setup_table_pointers(vm_page_t *dirpage, vm_page_t *tablepage,
-    pte_t *dirpte, bool is_new)
+vmp_md_setup_table_pointers(struct eprocess *ps, vm_page_t *dirpage,
+    vm_page_t *tablepage, pte_t *dirpte, bool is_new)
 {
-	vmp_pagetable_page_nonswap_pte_created(dirpage, is_new);
+	vmp_pagetable_page_nonswap_pte_created(ps, dirpage, is_new);
 	vmp_pte_hw_create(dirpte, tablepage->pfn, true);
 }
 
@@ -80,7 +75,8 @@ void
 vmp_pte_wire_state_release(struct vmp_pte_wire_state *state)
 {
 	for (int i = 0; i < VMP_TABLE_LEVELS; i++) {
-		vmp_pagetable_page_pte_deleted(state->pages[i], false);
+		vmp_pagetable_page_pte_deleted(state->ps, state->pages[i],
+		    false);
 	}
 }
 
@@ -89,21 +85,32 @@ vmp_pte_wire_state_release(struct vmp_pte_wire_state *state)
  * \pre VAD list mutex held
  */
 int
-vmp_wire_pte(eprocess_t *proc, vaddr_t vaddr, struct vmp_pte_wire_state *state)
+vmp_wire_pte(eprocess_t *ps, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 {
 	ipl_t ipl;
 	int indexes[VMP_TABLE_LEVELS + 1];
 	vm_page_t *pages[VMP_TABLE_LEVELS] = { 0 };
 	pte_t *table;
 
-	table = proc->pml4;
-	/* the root page never perishes while the process lives */
-	pages[VMP_TABLE_LEVELS - 1] = proc->pml4_page;
 	vmp_addr_unpack(vaddr, indexes);
+	state->ps = ps;
 
-	ke_wait(&proc->ws_lock, "vmp_wire_pte:ws_lock", false, false, -1);
+	ke_wait(&ps->ws_lock, "vmp_wire_pte:ws_lock", false, false, -1);
 	ipl = vmp_acquire_pfn_lock();
-	vmp_pagetable_page_nonswap_pte_created(proc->pml4_page, true);
+
+	/*
+	 * start by pinning root table with a valid-pte reference, to keep it
+	 * locked in the working set. this same approach is used through the
+	 * function.
+	 *
+	 * the principle is that at each iteration, the page table we are
+	 * examining has been locked into the working set by the processing of
+	 * the prior level. as such, pin the root table by calling the
+	 * new-nonswap-pte function; this pins the page.
+	 */
+	table = ps->pml4;
+	pages[VMP_TABLE_LEVELS - 1] = ps->pml4_page;
+	vmp_pagetable_page_nonswap_pte_created(ps, ps->pml4_page, true);
 
 	for (int level = VMP_TABLE_LEVELS; level > 0; level--) {
 		pte_t *pte = &table[indexes[level]];
@@ -114,7 +121,7 @@ vmp_wire_pte(eprocess_t *proc, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 			memcpy(state->pages, pages, sizeof(pages));
 			state->pte = pte;
 			vmp_release_pfn_lock(ipl);
-			ke_mutex_release(&proc->ws_lock);
+			ke_mutex_release(&ps->ws_lock);
 			return 0;
 		}
 
@@ -125,7 +132,7 @@ vmp_wire_pte(eprocess_t *proc, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 		case kPTEKindValid: {
 			vm_page_t *page = vmp_pte_hw_page(pte, level);
 			pages[level - 2] = page;
-			vmp_pagetable_page_nonswap_pte_created(page, true);
+			vmp_pagetable_page_nonswap_pte_created(ps, page, true);
 			table = (pte_t *)P2V(vmp_pte_hw_paddr(pte, level));
 			break;
 		}
@@ -140,10 +147,10 @@ vmp_wire_pte(eprocess_t *proc, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 			vmp_page_retain_locked(page);
 			page->used_ptes++;
 			page->nonswap_ptes++;
-			vmp_wsl_insert(proc, P2V(next_table_p), true);
+			vmp_wsl_insert(ps, P2V(next_table_p), true);
 
-			vmp_md_setup_table_pointers(pages[level - 1], page, pte,
-			    false);
+			vmp_md_setup_table_pointers(ps, pages[level - 1], page,
+			    pte, false);
 
 			table = (pte_t *)P2V(vmp_pte_hw_paddr(pte, level));
 			break;
@@ -154,12 +161,11 @@ vmp_wire_pte(eprocess_t *proc, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 			vmp_pager_state_t *state = page->pager_state;
 			state->refcount++;
 			vmp_release_pfn_lock(ipl);
-			ke_mutex_release(&proc->ws_lock);
+			ke_mutex_release(&ps->ws_lock);
 			ke_event_wait(&state->event, -1);
 			vmp_pager_state_release(state);
-			ke_wait(&proc->ws_lock,
-			    "vmp_wire_pte: reacquire ws_lock", false, false,
-			    -1);
+			ke_wait(&ps->ws_lock, "vmp_wire_pte: reacquire ws_lock",
+			    false, false, -1);
 			ipl = vmp_acquire_pfn_lock();
 			goto restart_level;
 		}
@@ -183,10 +189,10 @@ vmp_wire_pte(eprocess_t *proc, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 			vmp_page_retain_locked(page);
 			page->used_ptes++;
 			page->nonswap_ptes++;
-			vmp_wsl_insert(proc, P2V(vmp_page_paddr(page)), false);
+			vmp_wsl_insert(ps, P2V(vmp_page_paddr(page)), true);
 
-			vmp_md_setup_table_pointers(pages[level - 1], page, pte,
-			    true);
+			vmp_md_setup_table_pointers(ps, pages[level - 1], page,
+			    pte, true);
 
 			table = (pte_t *)P2V(vmp_pte_hw_paddr(pte, level));
 			break;

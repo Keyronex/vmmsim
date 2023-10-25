@@ -2,8 +2,8 @@
 
 #include "vm/vmp.h"
 
-uint8_t SOFT_pages[256 * 4096];
-static vm_page_t mypages[256];
+uint8_t SOFT_pages[256 * 4096] __attribute__((aligned(PGSIZE)));
+static vm_page_t mypages[256] __attribute__((aligned(PGSIZE)));
 kspinlock_t vmp_pfn_lock = KSPINLOCK_INITIALISER;
 
 struct vm_stat {

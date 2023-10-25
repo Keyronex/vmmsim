@@ -1,9 +1,9 @@
 #ifndef KRX_KDK_VM_H
 #define KRX_KDK_VM_H
 
-#include <kdk/soft.h>
-#include <kdk/queue.h>
 #include <kdk/defs.h>
+#include <kdk/queue.h>
+#include <kdk/soft.h>
 
 #if KRX_PLATFORM_BITS == 32
 #define PFN_BITS 20

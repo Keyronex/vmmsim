@@ -6,8 +6,8 @@
 #define KRX_PLATFORM_BITS 64
 
 #define PGSIZE 4096
-#define V2P(VALUE) (((vaddr_t) (VALUE)) - (vaddr_t)SOFT_pages)
-#define P2V(VALUE) (((vaddr_t) (VALUE)) + (vaddr_t)SOFT_pages)
+#define V2P(VALUE) (((vaddr_t)(VALUE)) - (vaddr_t)SOFT_pages)
+#define P2V(VALUE) (((vaddr_t)(VALUE)) + (vaddr_t)SOFT_pages)
 
 #define vm_page_direct_map_addr(PAGE) P2V(vmp_page_paddr(PAGE))
 

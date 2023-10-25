@@ -13,6 +13,7 @@ main(int argc, char *arv[])
 	int vmp_wire_pte(eprocess_t *, vaddr_t, struct vmp_pte_wire_state *);
 	void vmp_pte_wire_state_release(struct vmp_pte_wire_state *);
 	void vm_dump_pages(void);
+	void vmp_wsl_dump(eprocess_t * ps);
 
 	SIM_pages_init();
 
@@ -21,16 +22,21 @@ main(int argc, char *arv[])
 	vmp_page_alloc_locked(&page, kPageUsePML4, true);
 	proc.pml4 = (void *)P2V(vmp_page_paddr(page));
 	proc.pml4_page = page;
+	RB_INIT(&proc.wsl.tree);
+	TAILQ_INIT(&proc.wsl.queue);
+	proc.wsl.nlocked = 0;
 	pthread_mutex_init(&proc.ws_lock, NULL);
 
 	printf("Wiring round 1\n");
 	struct vmp_pte_wire_state state;
 	vmp_wire_pte(&proc, 0x0, &state);
-	//vmp_pte_wire_state_release(&state);
+	// vmp_pte_wire_state_release(&state);
 	vm_dump_pages();
 
 	printf("Wiring round 2\n");
 	vmp_wire_pte(&proc, 0x0, &state);
 	vmp_pte_wire_state_release(&state);
 	vm_dump_pages();
+
+	vmp_wsl_dump(&proc);
 }

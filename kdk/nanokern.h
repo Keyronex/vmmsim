@@ -2,11 +2,12 @@
 #define KRX_KDK_NANOKERN_H
 
 #include <assert.h>
+#include <kdk/defs.h>
 #include <pthread.h>
 #include <stdint.h>
-#include <threads.h>
 #include <stdio.h>
-#include <kdk/defs.h>
+#include <stdlib.h>
+#include <threads.h>
 
 typedef enum ipl { kIPL0, kIPLDPC } ipl_t;
 

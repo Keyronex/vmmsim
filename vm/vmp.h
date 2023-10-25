@@ -13,6 +13,7 @@
 typedef TAILQ_HEAD(vmp_page_queue, vm_page) vmp_page_queue_t;
 
 struct vmp_pte_wire_state {
+	struct eprocess *ps;
 	pte_t *pte;
 	vm_page_t *pages[VMP_TABLE_LEVELS];
 };
@@ -70,6 +71,19 @@ void vmp_wsl_insert(struct eprocess *ps, vaddr_t vaddr, bool locked)
  */
 void vmp_wsl_remove(struct eprocess *ps, vaddr_t vaddr)
     LOCK_REQUIRES(ps->ws_lock) LOCK_EXCLUDES(pfn_lock);
+/*!
+ * @brief Lock an existing entry into a working set list.
+ * @pre WS lock held.
+ */
+void vmp_wsl_lock_entry(struct eprocess *ps, vaddr_t vaddr)
+    LOCK_REQUIRES(ps->ws_lock);
+/*!
+ * @brief Lock an existing entry into a working set list.
+ * @pre WS lock held.
+ */
+void vmp_wsl_unlock_entry(struct eprocess *ps, vaddr_t vaddr)
+    LOCK_REQUIRES(ps->ws_lock);
+
 /*!
  * @brief Evict one entry from a working set list
  * @pre WS lock held
