@@ -100,6 +100,12 @@ vmp_pte_hw_create(pte_t *pte, pfn_t pfn, bool writeable)
 }
 
 static inline void
+vmp_pte_zero_create(pte_t *pte)
+{
+	pte->u64 = 0x0;
+}
+
+static inline void
 vmp_addr_unpack(vaddr_t vaddr, int unpacked[5])
 {
 	union vmp_vaddr addr;

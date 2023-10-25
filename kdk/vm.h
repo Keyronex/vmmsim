@@ -60,7 +60,8 @@ typedef struct vm_page {
 		/* kPageUsePML* */
 		struct __attribute__((packed)) {
 			/* Non-zero PTEs */
-			uint16_t used_ptes;
+			uint16_t nonzero_ptes;
+			/*! Non-swap PTEs - these keep the page in-core */
 			uint16_t nonswap_ptes;
 		};
 		/* kPageUse*Shared: offset into section */

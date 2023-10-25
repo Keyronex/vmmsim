@@ -44,9 +44,11 @@ vmp_wsl_insert(eprocess_t *ps, vaddr_t vaddr, bool locked)
 void
 vmp_wsl_remove(eprocess_t *ps, vaddr_t vaddr)
 {
-	struct vmp_wsle *wsle;
-
-	kfatal("Implement this function\n");
+	struct vmp_wsle *wsle = vmp_wsl_find(ps, vaddr);
+	kassert(wsle != NULL);
+	RB_REMOVE(vmp_wsle_rb, &ps->wsl.tree, wsle);
+	TAILQ_REMOVE(&ps->wsl.queue, wsle, queue_entry);
+	kmem_free(wsle, sizeof(*wsle));
 }
 
 void

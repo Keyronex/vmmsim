@@ -30,13 +30,17 @@ main(int argc, char *arv[])
 	printf("Wiring round 1\n");
 	struct vmp_pte_wire_state state;
 	vmp_wire_pte(&proc, 0x0, &state);
-	// vmp_pte_wire_state_release(&state);
+	vm_dump_pages();
+	printf("Now unwire.\n");
+	vmp_pte_wire_state_release(&state);
 	vm_dump_pages();
 
+#if 1
 	printf("Wiring round 2\n");
 	vmp_wire_pte(&proc, 0x0, &state);
 	vmp_pte_wire_state_release(&state);
 	vm_dump_pages();
+#endif
 
 	vmp_wsl_dump(&proc);
 }

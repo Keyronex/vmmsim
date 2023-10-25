@@ -1,5 +1,6 @@
 #include <string.h>
 
+#include "vm.h"
 #include "vm/vmp.h"
 
 uint8_t SOFT_pages[256 * 4096] __attribute__((aligned(PGSIZE)));
@@ -20,7 +21,7 @@ SIM_pages_init(void)
 	for (int i = 0; i < 256; i++) {
 		mypages[i].pfn = i;
 		mypages[i].referent_pte = 0;
-		mypages[i].used_ptes = 0;
+		mypages[i].nonzero_ptes = 0;
 		mypages[i].refcnt = 0;
 		mypages[i].use = kPageUseFree;
 		TAILQ_INSERT_TAIL(&free_pgq, &mypages[i], queue_link);
@@ -40,7 +41,7 @@ vmp_page_alloc_locked(vm_page_t **out, enum vm_page_use use, bool must)
 	TAILQ_REMOVE(&free_pgq, page, queue_link);
 
 	kassert(page->refcnt == 0);
-	kassert(page->used_ptes == 0);
+	kassert(page->nonzero_ptes == 0);
 	kassert(page->referent_pte == 0);
 	page->refcnt = 1;
 	page->use = use;
@@ -79,13 +80,22 @@ vmp_page_retain_locked(vm_page_t *page)
 void
 vmp_page_release_locked(vm_page_t *page)
 {
+	kassert(page >= mypages && page <= &mypages[256]);
 	kassert(page->refcnt > 0);
+	kassert(page->use != kPageUseFree);
 
 	if (page->refcnt-- == 1) {
 		/* going from active to inactive state */
 		vmstat.nactive -= 1;
 
 		switch (page->use) {
+		case kPageUseDeleted: {
+			TAILQ_INSERT_HEAD(&free_pgq, page, queue_link);
+			vmstat.nfree++;
+			page->use = kPageUseFree;
+			return;
+		}
+
 		default:
 			kfatal("Release page of unexpected type\n");
 		}
@@ -105,6 +115,8 @@ vmp_page_release_locked(vm_page_t *page)
 vm_page_t *
 vmp_paddr_to_page(paddr_t paddr)
 {
+	kassert(paddr % PGSIZE == 0);
+	kassert(paddr / PGSIZE < 256);
 	return &mypages[paddr / PGSIZE];
 }
 
@@ -137,7 +149,7 @@ vm_dump_pages(void)
 		if (mypages[i].use == kPageUseFree)
 			continue;
 		printf("PFN %d: Use %s RC %d Used-PTE %d Valid-PTE %d\n", i,
-		    vm_page_use_str(page->use), page->refcnt, page->used_ptes,
-		    page->nonswap_ptes);
+		    vm_page_use_str(page->use), page->refcnt,
+		    page->nonzero_ptes, page->nonswap_ptes);
 	}
 }
