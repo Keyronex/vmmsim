@@ -32,7 +32,7 @@ typedef struct vm_section {
 
 } vm_section_t;
 
-typedef struct vad {
+typedef struct vm_vad {
 	struct vm_vad_flags {
 		/*! current protection, and maximum legal protection */
 		bool writeable : 1, max_protection : 1,
@@ -51,7 +51,7 @@ typedef struct vad {
 	vaddr_t start, end;
 	/*! Section object; only set if flags.private = false */
 	vm_section_t *section;
-} vad_t;
+} vm_vad_t;
 
 int vmp_page_alloc_locked(vm_page_t **out, enum vm_page_use use, bool must);
 vm_page_t *vmp_page_retain_locked(vm_page_t *page);
@@ -83,7 +83,6 @@ void vmp_wsl_lock_entry(struct eprocess *ps, vaddr_t vaddr)
  */
 void vmp_wsl_unlock_entry(struct eprocess *ps, vaddr_t vaddr)
     LOCK_REQUIRES(ps->ws_lock);
-
 /*!
  * @brief Evict one entry from a working set list
  * @pre WS lock held
@@ -91,6 +90,13 @@ void vmp_wsl_unlock_entry(struct eprocess *ps, vaddr_t vaddr)
  */
 void wsl_evict_one(struct eprocess *ps) LOCK_REQUIRES(ps->ws_lock)
     LOCK_REQUIRES(pfn_lock);
+
+vm_vad_t *vmp_ps_vad_find(struct eprocess *ps, vaddr_t vaddr);
+int vm_ps_allocate(struct eprocess *ps, vaddr_t *vaddrp, size_t size,
+    bool exact);
+int vm_ps_map_section_view(struct eprocess *ps, void *section, vaddr_t *vaddrp,
+    size_t size, uint64_t offset, bool initial_writeability,
+    bool max_writeability, bool inherit_shared, bool cow, bool exact);
 
 /* paddr_t vmp_page_paddr(vm_page_t *page) */
 #define vmp_page_paddr(PAGE) ((paddr_t)(PAGE)->pfn << VMP_PAGE_SHIFT)

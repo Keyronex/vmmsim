@@ -6,7 +6,11 @@
 #include <kdk/queue.h>
 #include <kdk/tree.h>
 
+RB_HEAD(vm_vad_rbtree, vm_vad);
+
 typedef struct eprocess {
+	kmutex_t vad_lock;
+	struct vm_vad_rbtree vad_tree;
 	kmutex_t ws_lock;
 	void *pml4;
 	struct vm_page *pml4_page;

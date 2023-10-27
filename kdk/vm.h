@@ -5,6 +5,8 @@
 #include <kdk/queue.h>
 #include <kdk/soft.h>
 
+#pragma GCC diagnostic ignored "-Waddress-of-packed-member"
+
 #if KRX_PLATFORM_BITS == 32
 #define PFN_BITS 20
 #else
