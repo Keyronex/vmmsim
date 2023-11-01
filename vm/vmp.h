@@ -60,17 +60,22 @@ vm_page_t *vmp_paddr_to_page(paddr_t paddr);
 
 /*!
  * @brief Insert one entry into a working set list.
- * n.b. Does not trim
+ *
+ * n.b. Page should be REFERENCED - this effectively consumes that reference.
+ *
+ * @pre PFNDB lock held
  * @pre WS lock held
  */
 void vmp_wsl_insert(struct eprocess *ps, vaddr_t vaddr, bool locked)
-    LOCK_REQUIRES(ps->ws_lock) LOCK_EXCLUDES(pfn_lock);
+    LOCK_REQUIRES(ps->ws_lock) LOCK_REQUIRES(pfn_lock);
 /*!
  * @brief Remove one entry from a working set list.
+ *
+ * @pre PFNDB lock held
  * @pre WS lock held
  */
 void vmp_wsl_remove(struct eprocess *ps, vaddr_t vaddr)
-    LOCK_REQUIRES(ps->ws_lock) LOCK_EXCLUDES(pfn_lock);
+    LOCK_REQUIRES(ps->ws_lock) LOCK_REQUIRES(pfn_lock);
 /*!
  * @brief Lock an existing entry into a working set list.
  * @pre WS lock held.
@@ -78,17 +83,33 @@ void vmp_wsl_remove(struct eprocess *ps, vaddr_t vaddr)
 void vmp_wsl_lock_entry(struct eprocess *ps, vaddr_t vaddr)
     LOCK_REQUIRES(ps->ws_lock);
 /*!
- * @brief Lock an existing entry into a working set list.
+ * @brief Unlock a locked entry from a working set list.
  * @pre WS lock held.
  */
 void vmp_wsl_unlock_entry(struct eprocess *ps, vaddr_t vaddr)
     LOCK_REQUIRES(ps->ws_lock);
+
 /*!
- * @brief Evict one entry from a working set list
- * @pre WS lock held
- * @pre PFN lock held
+ * @brief Wire a PTE.
+ * @pre WS lock held. (May be dropped and reacquired!)
  */
-void wsl_evict_one(struct eprocess *ps) LOCK_REQUIRES(ps->ws_lock)
+int vmp_wire_pte(struct eprocess *, vaddr_t, struct vmp_pte_wire_state *);
+/*!
+ * @brief Release locked PTE state.
+ */
+void vmp_pte_wire_state_release(struct vmp_pte_wire_state *);
+
+/*!
+ * @brief Update pagetable page after nonswap PTE(s) created within it.
+ *
+ * This will amend the PFNDB entry's nonswap PTE count, and if the previous
+ * nonswap PTE count was 0, lock the page into the working set.
+ *
+ * @param is_new Whether the nonswap PTE is brand new (replacing a zero PTE; if
+ * so, used_ptes count must be increased as well as nonswap_ptes.)
+ */
+void vmp_pagetable_page_nonswap_pte_created(struct eprocess *ps,
+    vm_page_t *page, bool is_new) LOCK_REQUIRES(ps->ws_lock)
     LOCK_REQUIRES(pfn_lock);
 
 vm_vad_t *vmp_ps_vad_find(struct eprocess *ps, vaddr_t vaddr);

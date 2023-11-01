@@ -24,20 +24,54 @@ vmp_wsl_find(eprocess_t *ps, vaddr_t vaddr)
 	return RB_FIND(vmp_wsle_rb, &ps->wsl.tree, &key);
 }
 
+static struct vmp_wsle *
+wsl_trim_1(eprocess_t *ps)
+{
+	struct vmp_wsle *wsle;
+	vm_page_t *pte_page;
+	pte_t *pte;
+	int r;
+
+	wsle = TAILQ_FIRST(&ps->wsl.queue);
+	if (wsle == NULL)
+		return NULL;
+
+	TAILQ_REMOVE(&ps->wsl.queue, wsle, queue_entry);
+	RB_REMOVE(vmp_wsle_rb, &ps->wsl.tree, wsle);
+
+	kprintf("Evicting 0x%zx\n", wsle->vaddr);
+	ps->wsl.nentries--;
+
+	kfatal("Do eviction\n");
+
+	return wsle;
+}
+
 void
 vmp_wsl_insert(eprocess_t *ps, vaddr_t vaddr, bool locked)
 {
-	struct vmp_wsle *wsle;
+	struct vmp_wsle *wsle = NULL;
 
 	kassert(vmp_wsl_find(ps, vaddr) == NULL);
+	kassert(ps->wsl.nentries <= ps->wsl.max);
 
+	if (ps->wsl.nentries == ps->wsl.max) {
+		wsle = wsl_trim_1(ps);
+		kassert(wsle != NULL);
+	}
+
+	if (wsle == NULL)
+		wsle = kmem_alloc(sizeof(*wsle));
+
+	ps->wsl.nentries++;
 	if (locked)
 		ps->wsl.nlocked++;
 
-	wsle = kmem_alloc(sizeof(*wsle));
 	wsle->vaddr = vaddr;
+
 	if (!locked)
 		TAILQ_INSERT_TAIL(&ps->wsl.queue, wsle, queue_entry);
+
 	RB_INSERT(vmp_wsle_rb, &ps->wsl.tree, wsle);
 }
 
@@ -76,6 +110,10 @@ vmp_wsl_dump(eprocess_t *ps)
 	kprintf("WSL: %zu locked:\n", ps->wsl.nlocked);
 	kprintf("All entries:\n");
 	RB_FOREACH (wsle, vmp_wsle_rb, &ps->wsl.tree) {
-		kprintf("0x%zx\n", wsle->vaddr);
+		kprintf("- 0x%zx\n", wsle->vaddr);
+	}
+	kprintf("Dynamic Entries:\n");
+	TAILQ_FOREACH (wsle, &ps->wsl.queue, queue_entry) {
+		kprintf("- 0x%zx\n", wsle->vaddr);
 	}
 }

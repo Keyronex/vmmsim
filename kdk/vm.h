@@ -96,6 +96,15 @@ typedef struct vm_page {
 	uintptr_t swap_descriptor;
 } vm_page_t;
 
+/*!
+ * Memory descriptor list.
+ */
+typedef struct vm_mdl {
+	size_t nentries;
+	size_t offset;
+	vm_page_t *pages[0];
+} vm_mdl_t;
+
 enum vmp_pte_kind {
 	kPTEKindZero,
 	kPTEKindTrans,
@@ -103,5 +112,7 @@ enum vmp_pte_kind {
 	kPTEKindBusy,
 	kPTEKindValid,
 };
+
+int vm_fault(vaddr_t vaddr, bool write, vm_mdl_t *out);
 
 #endif /* KRX_KDK_VM_H */

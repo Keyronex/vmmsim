@@ -5,42 +5,48 @@
 #include "vm/vmp.h"
 
 __thread ipl_t SIM_ipl = kIPL0;
+eprocess_t kernel_ps;
 
 int
 main(int argc, char *arv[])
 {
 	void SIM_pages_init(void);
-	int vmp_wire_pte(eprocess_t *, vaddr_t, struct vmp_pte_wire_state *);
-	void vmp_pte_wire_state_release(struct vmp_pte_wire_state *);
 	void vm_dump_pages(void);
 	void vmp_wsl_dump(eprocess_t * ps);
 
 	SIM_pages_init();
 
 	vm_page_t *page;
-	eprocess_t proc;
 	vmp_page_alloc_locked(&page, kPageUsePML4, true);
-	proc.pml4 = (void *)P2V(vmp_page_paddr(page));
-	proc.pml4_page = page;
-	RB_INIT(&proc.wsl.tree);
-	TAILQ_INIT(&proc.wsl.queue);
-	proc.wsl.nlocked = 0;
-	pthread_mutex_init(&proc.ws_lock, NULL);
+	kernel_ps.pml4 = (void *)P2V(vmp_page_paddr(page));
+	kernel_ps.pml4_page = page;
+	RB_INIT(&kernel_ps.wsl.tree);
+	TAILQ_INIT(&kernel_ps.wsl.queue);
+	kernel_ps.wsl.nlocked = 0;
+	kernel_ps.wsl.nentries = 0;
+	kernel_ps.wsl.max = 4;
+	pthread_mutex_init(&kernel_ps.ws_lock, NULL);
 
+#if 0
 	printf("Wiring round 1\n");
 	struct vmp_pte_wire_state state;
-	vmp_wire_pte(&proc, 0x0, &state);
+	vmp_wire_pte(&kernel_ps, 0x0, &state);
 	vm_dump_pages();
 	printf("Now unwire.\n");
 	vmp_pte_wire_state_release(&state);
 	vm_dump_pages();
 
-#if 1
 	printf("Wiring round 2\n");
-	vmp_wire_pte(&proc, 0x0, &state);
+	vmp_wire_pte(&kernel_ps, 0x0, &state);
 	vmp_pte_wire_state_release(&state);
 	vm_dump_pages();
 #endif
 
-	vmp_wsl_dump(&proc);
+	vaddr_t vaddr = 0x0;
+	vm_ps_allocate(&kernel_ps, &vaddr, PGSIZE * 32, true);
+
+	vm_fault(0x0, false, NULL);
+	vm_fault(PGSIZE, false, NULL);
+
+	vmp_wsl_dump(&kernel_ps);
 }

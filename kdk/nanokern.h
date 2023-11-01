@@ -155,7 +155,10 @@ ke_mutex_release(kmutex_t *mutex)
 	pthread_mutex_unlock(mutex);
 }
 
+#define kVMemPFNLockHeld 1
+
 #define kmem_alloc(SIZE) malloc(SIZE)
+#define kmem_xalloc(SIZE, FLAGS) malloc(SIZE)
 #define kmem_free(PTR, SIZE) free(PTR)
 
 #endif /* KRX_KDK_NANOKERN_H */

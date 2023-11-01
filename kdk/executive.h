@@ -18,7 +18,11 @@ typedef struct eprocess {
 		TAILQ_HEAD(, vmp_wsle) queue;
 		RB_HEAD(vmp_wsle_rb, vmp_wsle) tree;
 		size_t nlocked;
+		size_t nentries;
+		size_t max;
 	} wsl;
 } eprocess_t;
+
+extern eprocess_t kernel_ps;
 
 #endif /* KRX_KDK_EXECUTIVE_H */

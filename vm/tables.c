@@ -11,18 +11,7 @@ page_is_root_table(vm_page_t *page)
 	return page->use == (kPageUsePML1 + (VMP_TABLE_LEVELS - 1));
 }
 
-/*!
- * @brief Update pagetable page after nonswap PTE(s) created within it.
- *
- * This will amend the PFNDB entry's nonswap PTE count, and if the previous
- * nonswap PTE count was 0, lock the page into the working set.
- *
- * @param is_new Whether the nonswap PTE is brand new (replacing a zero PTE; if
- * so, used_ptes count must be increased as well as nonswap_ptes.)
- *
- * @pre ps->ws_lock held
- */
-static void
+void
 vmp_pagetable_page_nonswap_pte_created(eprocess_t *ps, vm_page_t *page,
     bool is_new)
 {
@@ -131,7 +120,6 @@ vmp_wire_pte(eprocess_t *ps, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 	vmp_addr_unpack(vaddr, indexes);
 	state->ps = ps;
 
-	ke_wait(&ps->ws_lock, "vmp_wire_pte:ws_lock", false, false, -1);
 	ipl = vmp_acquire_pfn_lock();
 
 	/*
@@ -157,7 +145,6 @@ vmp_wire_pte(eprocess_t *ps, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 			memcpy(state->pages, pages, sizeof(pages));
 			state->pte = pte;
 			vmp_release_pfn_lock(ipl);
-			ke_mutex_release(&ps->ws_lock);
 			return 0;
 		}
 
