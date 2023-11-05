@@ -98,6 +98,12 @@ int vmp_wire_pte(struct eprocess *, vaddr_t, struct vmp_pte_wire_state *);
  * @brief Release locked PTE state.
  */
 void vmp_pte_wire_state_release(struct vmp_pte_wire_state *);
+/*!
+ * @brief Get pointer to an in-memory PTE.
+ * n.b. does not wire anything, should only be called when the PTE is stable
+ * (due to being kernel wired memory or otherwise certain to be in-memory, etc.)
+ */
+int vmp_fetch_pte(struct eprocess *ps, vaddr_t vaddr, pte_t **pte_out);
 
 /*!
  * @brief Update pagetable page after nonswap PTE(s) created within it.
@@ -131,6 +137,12 @@ int vm_ps_map_section_view(struct eprocess *ps, void *section, vaddr_t *vaddrp,
 /* vm_page_t *vmp_pte_hw_page(pte_t *pte, int level) */
 #define vmp_pte_hw_page(PTE, LVL) vmp_paddr_to_page(vmp_pte_hw_paddr(PTE, LVL))
 
+/* paddr_t vmp_pfn_to_paddr(pte_t *pte) */
+#define vmp_pte_trans_paddr(PTE) vmp_pfn_to_paddr((PTE)->trans.pfn)
+
+/* vm_page_t *vmp_pte_trans_page(pte_t *pte) */
+#define vmp_pte_trans_page(PTE) vmp_paddr_to_page(vmp_pte_trans_paddr(PTE))
+
 /* ipl_t vmp_acquire_pfn_lock(void) */
 #define vmp_acquire_pfn_lock() ke_spinlock_acquire(&vmp_pfn_lock);
 
@@ -138,5 +150,6 @@ int vm_ps_map_section_view(struct eprocess *ps, void *section, vaddr_t *vaddrp,
 #define vmp_release_pfn_lock(IPL) ke_spinlock_release(&vmp_pfn_lock, IPL)
 
 extern kspinlock_t vmp_pfn_lock;
+extern kevent_t vmp_swapper_event;
 
 #endif /* KRX_VM_VMP_H */

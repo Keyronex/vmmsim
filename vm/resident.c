@@ -20,6 +20,7 @@ SIM_pages_init(void)
 {
 	for (int i = 0; i < 256; i++) {
 		mypages[i].pfn = i;
+		mypages[i].dirty = false;
 		mypages[i].referent_pte = 0;
 		mypages[i].nonzero_ptes = 0;
 		mypages[i].refcnt = 0;
@@ -96,6 +97,9 @@ vmp_page_release_locked(vm_page_t *page)
 			return;
 		}
 
+		case kPageUseAnonPrivate:
+			break;
+
 		default:
 			kfatal("Release page of unexpected type\n");
 		}
@@ -144,12 +148,25 @@ vm_page_use_str(enum vm_page_use use)
 void
 vm_dump_pages(void)
 {
-	for (int i = 0; i < 256; i++) {
-		vm_page_t *page = &mypages[i];
+	vm_page_t *page;
+
+	kprintf("Page states:\n");
+	for (pfn_t i = 0; i < 256; i++) {
+		page = &mypages[i];
 		if (mypages[i].use == kPageUseFree)
 			continue;
-		printf("PFN %d: Use %s RC %d Used-PTE %d Valid-PTE %d\n", i,
+		printf("- PFN %lu: Use %s RC %d Used-PTE %d Valid-PTE %d\n", i,
 		    vm_page_use_str(page->use), page->refcnt,
 		    page->nonzero_ptes, page->nonswap_ptes);
+	}
+	kprintf("Standby queue:\n");
+	TAILQ_FOREACH (page, &standby_pgq, queue_link) {
+		kprintf("- PFN %lu: Use %s Page %p\n", (uintptr_t)page->pfn,
+		    vm_page_use_str(page->use), page);
+	}
+	kprintf("Dirty queue:\n");
+	TAILQ_FOREACH (page, &modified_pgq, queue_link) {
+		kprintf("- PFN %lu: Use %s Page %p\n", (uintptr_t)page->pfn,
+		    vm_page_use_str(page->use), page);
 	}
 }

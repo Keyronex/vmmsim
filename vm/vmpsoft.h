@@ -95,7 +95,7 @@ vmp_pte_hw_create(pte_t *pte, pfn_t pfn, bool writeable)
 {
 	pte->u64 = 0x0;
 	pte->hw.valid = 1;
-	pte->hw.writeable = 1;
+	pte->hw.writeable = writeable;
 	pte->hw.pfn = pfn;
 }
 
@@ -103,6 +103,20 @@ static inline void
 vmp_pte_zero_create(pte_t *pte)
 {
 	pte->u64 = 0x0;
+}
+
+static inline void
+vmp_pte_trans_create(pte_t *pte, pfn_t pfn)
+{
+	pte->trans.valid = 0;
+	pte->trans.kind = kSoftPteKindTrans;
+	pte->trans.pfn = pfn;
+}
+
+static inline bool
+vmp_pte_hw_is_writeable(pte_t *pte)
+{
+	return pte->hw.writeable;
 }
 
 static inline void

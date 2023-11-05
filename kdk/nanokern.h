@@ -1,7 +1,9 @@
 #ifndef KRX_KDK_NANOKERN_H
 #define KRX_KDK_NANOKERN_H
 
+#include <asm-generic/errno.h>
 #include <assert.h>
+#include <bits/time.h>
 #include <kdk/defs.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -70,7 +72,7 @@ typedef struct {
 static inline void
 nanosecs_to_timespec(struct timespec /* out */ *ts, int64_t nanosecs)
 {
-	clock_gettime(CLOCK_REALTIME, ts);
+	clock_gettime(CLOCK_MONOTONIC, ts);
 
 	ts->tv_sec += nanosecs / 1000000000;
 	ts->tv_nsec += nanosecs % 1000000000;
@@ -84,8 +86,11 @@ nanosecs_to_timespec(struct timespec /* out */ *ts, int64_t nanosecs)
 static inline void
 ke_event_init(kevent_t *event, bool signalled)
 {
+	pthread_condattr_t attr;
+	pthread_condattr_init(&attr);
+	pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
 	pthread_mutex_init(&event->mutex, NULL);
-	pthread_cond_init(&event->cond, NULL);
+	pthread_cond_init(&event->cond, &attr);
 	event->state = false;
 }
 
@@ -109,21 +114,21 @@ ke_event_clear(kevent_t *event)
 static inline kwaitstatus_t
 ke_event_wait(kevent_t *event, int64_t nanosecs)
 {
-	kwaitstatus_t r = kKernWaitStatusTimedOut;
+	kwaitstatus_t r = kKernWaitStatusOK;
 	int ret;
 	pthread_mutex_lock(&event->mutex);
 	while (!event->state) {
 		if (nanosecs == -1) {
 			ret = pthread_cond_wait(&event->cond, &event->mutex);
-			if (ret == 0)
-				r = kKernWaitStatusOK;
 		} else {
 			struct timespec ts;
 			nanosecs_to_timespec(&ts, nanosecs);
 			ret = pthread_cond_timedwait(&event->cond,
 			    &event->mutex, &ts);
-			if (ret == 0)
-				r = kKernWaitStatusOK;
+			if (ret == ETIMEDOUT) {
+				r = kKernWaitStatusTimedOut;
+				break;
+			}
 		}
 	}
 out:

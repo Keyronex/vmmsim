@@ -48,6 +48,16 @@ vm_fault(vaddr_t vaddr, bool write, vm_mdl_t *out)
 		} else {
 			kfatal("Do file read fault\n");
 		}
+	} else if (pte_kind == kPTEKindTrans) {
+		vm_page_t *page = vmp_pte_trans_page(pte_state.pte);
+		vmp_page_retain_locked(page);
+		vmp_pte_hw_create(pte_state.pte, page->pfn, false);
+		vmp_wsl_insert(ps, vaddr, false);
+		if (out != NULL) {
+			vmp_page_retain_locked(page);
+			out->pages[out->offset / PGSIZE] = page;
+			out->offset += PGSIZE;
+		}
 	} else {
 		kfatal("Unhandled PTE kind\n");
 	}

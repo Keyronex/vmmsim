@@ -1,5 +1,6 @@
 #include <kdk/executive.h>
 
+#include "vm/vmpsoft.h"
 #include "vmp.h"
 
 struct vmp_wsle {
@@ -24,11 +25,31 @@ vmp_wsl_find(eprocess_t *ps, vaddr_t vaddr)
 	return RB_FIND(vmp_wsle_rb, &ps->wsl.tree, &key);
 }
 
+static void
+wsl_evict(eprocess_t *ps, pte_t *pte)
+{
+	bool dirty = vmp_pte_hw_is_writeable(pte);
+	vm_page_t *page = vmp_pte_hw_page(pte, 1);
+
+	page->dirty |= dirty;
+
+	switch (page->use) {
+	case kPageUseAnonPrivate: {
+		vmp_pte_trans_create(pte, vmp_pte_hw_pfn(pte, 1));
+		break;
+	}
+
+	default:
+		kfatal("Implement me\n");
+	}
+
+	vmp_page_release_locked(page);
+}
+
 static struct vmp_wsle *
 wsl_trim_1(eprocess_t *ps)
 {
 	struct vmp_wsle *wsle;
-	vm_page_t *pte_page;
 	pte_t *pte;
 	int r;
 
@@ -42,7 +63,8 @@ wsl_trim_1(eprocess_t *ps)
 	kprintf("Evicting 0x%zx\n", wsle->vaddr);
 	ps->wsl.nentries--;
 
-	kfatal("Do eviction\n");
+	vmp_fetch_pte(ps, wsle->vaddr, &pte);
+	wsl_evict(ps, pte);
 
 	return wsle;
 }
