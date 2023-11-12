@@ -148,8 +148,10 @@ vmp_wire_pte(eprocess_t *ps, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 			return 0;
 		}
 
+#if DEBUG_TABLES
 		printf("Dealing with pte in level %d; pte is %p; page is %p\n",
 		    level, pte, pages[level - 1]);
+#endif
 
 	restart_level:
 		switch (vmp_pte_characterise(pte)) {

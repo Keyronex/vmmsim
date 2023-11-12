@@ -8,6 +8,55 @@ __thread ipl_t SIM_ipl = kIPL0;
 pthread_t swapper_thread;
 eprocess_t kernel_ps;
 
+void
+access(paddr_t addr, bool for_write)
+{
+	pte_t *l4, *l3, *l2, *l1, *pte;
+	paddr_t final_addr;
+	union vmp_vaddr unpacked;
+	ipl_t ipl;
+
+	unpacked.addr = addr;
+
+retry:
+	l4 = (pte_t *)kernel_ps.pml4;
+	if (!l4[unpacked.pml4i].hw.valid) {
+		printf("mmu: invalid entry in pml4\n");
+		vm_fault(addr, for_write, NULL);
+		goto retry;
+	}
+
+	l3 = (pte_t *)P2V(vmp_pte_hw_paddr(&l4[unpacked.pml4i], 4));
+	if (!l3[unpacked.pml3i].hw.valid) {
+		printf("mmu: invalid entry in pml3\n");
+		vm_fault(addr, for_write, NULL);
+		goto retry;
+	}
+
+	l2 = (pte_t *)P2V(vmp_pte_hw_paddr(&l3[unpacked.pml3i], 3));
+	if (!l2[unpacked.pml2i].hw.valid) {
+		printf("mmu: invalid entry in pml2\n");
+		vm_fault(addr, for_write, NULL);
+		goto retry;
+	}
+
+	l1 = (pte_t *)P2V(vmp_pte_hw_paddr(&l2[unpacked.pml2i], 2));
+	if (!l1[unpacked.pml1i].hw.valid) {
+		printf("mmu: invalid entry in pml1\n");
+		vm_fault(addr, for_write, NULL);
+		goto retry;
+	} else if (for_write && !l1[unpacked.pml1i].hw.writeable) {
+		printf("mmu: write protected\n");
+		vm_fault(addr, for_write, NULL);
+		goto retry;
+	}
+
+	final_addr = vmp_pte_hw_paddr(&l1[unpacked.pml1i], 1);
+
+	printf("mmu: %s 0x%zx => 0x%zx\n", for_write ? "write" : "read ", addr,
+	    final_addr + unpacked.pgi);
+}
+
 int
 main(int argc, char *arv[])
 {
@@ -52,14 +101,15 @@ main(int argc, char *arv[])
 	vaddr_t vaddr = 0x0;
 	vm_ps_allocate(&kernel_ps, &vaddr, 4294967296 * 32, true);
 
+#if 1
 	for (int i = 0; i < 10; i++) {
 		for (int j = 0; j < 8; j++) {
-			vm_fault(PGSIZE * j, false, NULL);
-			vm_fault(4294967296 + PGSIZE * j, false, NULL);
-			vm_fault(4294967296 * 2 + PGSIZE * j, false, NULL);
+			access(PGSIZE * j, false);
+			access(4294967296 + PGSIZE * j, false);
+			access(4294967296 * 2 + PGSIZE * j, false);
 		}
 	}
-	// vm_fault(PGSIZE, false, NULL);
+#endif
 
 	vmp_wsl_dump(&kernel_ps);
 	vm_dump_pages();
