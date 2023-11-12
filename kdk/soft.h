@@ -11,6 +11,8 @@
 
 #define vm_page_direct_map_addr(PAGE) P2V(vmp_page_paddr(PAGE))
 
-extern uint8_t SOFT_pages[4096 * 256];
+#define SOFT_NPAGES 32
+
+extern uint8_t SOFT_pages[4096 * SOFT_NPAGES];
 
 #endif /* KRX_KDK_PLATFORM_H */

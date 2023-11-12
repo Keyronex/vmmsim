@@ -12,6 +12,17 @@
 
 typedef TAILQ_HEAD(vmp_page_queue, vm_page) vmp_page_queue_t;
 
+struct vm_stat {
+	size_t nfree, nmodified, nstandby, nactive;
+};
+
+struct vm_param {
+	/*! count of pages to expand a working set by */
+	size_t ws_page_expansion_count;
+	/*! minimum available pages for WS expansion */
+	size_t min_avail_for_expansion;
+};
+
 struct vmp_pte_wire_state {
 	struct eprocess *ps;
 	pte_t *pte;
@@ -149,6 +160,8 @@ int vm_ps_map_section_view(struct eprocess *ps, void *section, vaddr_t *vaddrp,
 /* void vmp_release_pfn_lock(ipl_t ipl) */
 #define vmp_release_pfn_lock(IPL) ke_spinlock_release(&vmp_pfn_lock, IPL)
 
+extern struct vm_param vmparam;
+extern struct vm_stat vmstat;
 extern kspinlock_t vmp_pfn_lock;
 extern kevent_t vmp_swapper_event;
 

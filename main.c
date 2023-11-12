@@ -22,6 +22,8 @@ main(int argc, char *arv[])
 	vmp_page_alloc_locked(&page, kPageUsePML4, true);
 	kernel_ps.pml4 = (void *)P2V(vmp_page_paddr(page));
 	kernel_ps.pml4_page = page;
+	vmparam.ws_page_expansion_count = 4;
+	vmparam.min_avail_for_expansion = 8;
 	RB_INIT(&kernel_ps.wsl.tree);
 	TAILQ_INIT(&kernel_ps.wsl.queue);
 	kernel_ps.wsl.nlocked = 0;
@@ -48,12 +50,16 @@ main(int argc, char *arv[])
 #endif
 
 	vaddr_t vaddr = 0x0;
-	vm_ps_allocate(&kernel_ps, &vaddr, PGSIZE * 32, true);
+	vm_ps_allocate(&kernel_ps, &vaddr, 4294967296 * 32, true);
 
-	vm_fault(0x0, false, NULL);
-	vm_fault(PGSIZE, false, NULL);
-	vm_fault(PGSIZE * 2, false, NULL);
-	vm_fault(PGSIZE, false, NULL);
+	for (int i = 0; i < 10; i++) {
+		for (int j = 0; j < 8; j++) {
+			vm_fault(PGSIZE * j, false, NULL);
+			vm_fault(4294967296 + PGSIZE * j, false, NULL);
+			vm_fault(4294967296 * 2 + PGSIZE * j, false, NULL);
+		}
+	}
+	// vm_fault(PGSIZE, false, NULL);
 
 	vmp_wsl_dump(&kernel_ps);
 	vm_dump_pages();

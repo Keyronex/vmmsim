@@ -1,6 +1,5 @@
 #include <kdk/executive.h>
 
-#include "vm/vmpsoft.h"
 #include "vmp.h"
 
 struct vmp_wsle {
@@ -69,6 +68,19 @@ wsl_trim_1(eprocess_t *ps)
 	return wsle;
 }
 
+/*! true if it could expand, false otherwise */
+static bool
+wsl_try_expand(eprocess_t *ps) LOCK_REQUIRES(ps->ws_lock)
+    LOCK_REQUIRES(vmp_pfn_lock)
+{
+	if (vmstat.nfree + vmstat.nstandby > vmparam.min_avail_for_expansion) {
+		ps->wsl.max += vmparam.ws_page_expansion_count;
+		return true;
+	}
+	else
+		return false;
+}
+
 void
 vmp_wsl_insert(eprocess_t *ps, vaddr_t vaddr, bool locked)
 {
@@ -77,9 +89,9 @@ vmp_wsl_insert(eprocess_t *ps, vaddr_t vaddr, bool locked)
 	kassert(vmp_wsl_find(ps, vaddr) == NULL);
 	kassert(ps->wsl.nentries <= ps->wsl.max);
 
-	if (ps->wsl.nentries == ps->wsl.max) {
-		wsle = wsl_trim_1(ps);
-		kassert(wsle != NULL);
+	if (ps->wsl.nentries == ps->wsl.max && wsl_try_expand(ps) == false) {
+	 wsle = wsl_trim_1(ps);
+	 kassert(wsle != NULL);
 	}
 
 	if (wsle == NULL)
@@ -129,7 +141,7 @@ void
 vmp_wsl_dump(eprocess_t *ps)
 {
 	struct vmp_wsle *wsle;
-	kprintf("WSL: %zu locked:\n", ps->wsl.nlocked);
+	kprintf("WSL: %zu entries\n%zu locked enties:\n", ps->wsl.nentries, ps->wsl.nlocked);
 	kprintf("All entries:\n");
 	RB_FOREACH (wsle, vmp_wsle_rb, &ps->wsl.tree) {
 		kprintf("- 0x%zx\n", wsle->vaddr);

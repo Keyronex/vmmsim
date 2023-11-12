@@ -1,5 +1,6 @@
 #include <kdk/executive.h>
 
+#include "vm.h"
 #include "vm/vmpsoft.h"
 #include "vmp.h"
 
@@ -22,6 +23,10 @@ vm_fault(vaddr_t vaddr, bool write, vm_mdl_t *out)
 	vmp_wire_pte(ps, vaddr, &pte_state);
 	ipl = vmp_acquire_pfn_lock();
 	pte_kind = vmp_pte_characterise(pte_state.pte);
+
+	if (pte_kind == kPTEKindValid &&
+	    !vmp_pte_hw_is_writeable(pte_state.pte) && write)
+		kfatal("Write fault\n");
 
 	if (pte_kind == kPTEKindZero) {
 		if (vad->section == NULL) {
@@ -58,8 +63,15 @@ vm_fault(vaddr_t vaddr, bool write, vm_mdl_t *out)
 			out->pages[out->offset / PGSIZE] = page;
 			out->offset += PGSIZE;
 		}
+	} else if (pte_kind == kPTEKindValid) {
+		if (out != NULL) {
+			vm_page_t *page = vmp_pte_hw_page(pte_state.pte, 1);
+			vmp_page_retain_locked(page);
+			out->pages[out->offset / PGSIZE] = page;
+			out->offset += PGSIZE;
+		}
 	} else {
-		kfatal("Unhandled PTE kind\n");
+		kfatal("Unhandled PTE kind %d\n", pte_kind);
 	}
 
 	vmp_pte_wire_state_release(&pte_state);

@@ -1,15 +1,15 @@
 #include <string.h>
 
+#include "soft.h"
 #include "vm.h"
 #include "vm/vmp.h"
 
-uint8_t SOFT_pages[256 * 4096] __attribute__((aligned(PGSIZE)));
-static vm_page_t mypages[256] __attribute__((aligned(PGSIZE)));
-kspinlock_t vmp_pfn_lock = KSPINLOCK_INITIALISER;
 
-struct vm_stat {
-	size_t nfree, nmodified, nstandby, nactive;
-} vmstat;
+uint8_t SOFT_pages[4096 * SOFT_NPAGES] __attribute__((aligned(PGSIZE)));
+static vm_page_t mypages[SOFT_NPAGES] __attribute__((aligned(PGSIZE)));
+kspinlock_t vmp_pfn_lock = KSPINLOCK_INITIALISER;
+struct vm_param vmparam;
+struct vm_stat vmstat;
 
 vmp_page_queue_t free_pgq = TAILQ_HEAD_INITIALIZER(free_pgq),
 		 standby_pgq = TAILQ_HEAD_INITIALIZER(standby_pgq),
@@ -18,7 +18,7 @@ vmp_page_queue_t free_pgq = TAILQ_HEAD_INITIALIZER(free_pgq),
 void
 SIM_pages_init(void)
 {
-	for (int i = 0; i < 256; i++) {
+	for (int i = 0; i < SOFT_NPAGES; i++) {
 		mypages[i].pfn = i;
 		mypages[i].dirty = false;
 		mypages[i].referent_pte = 0;
@@ -27,7 +27,7 @@ SIM_pages_init(void)
 		mypages[i].use = kPageUseFree;
 		TAILQ_INSERT_TAIL(&free_pgq, &mypages[i], queue_link);
 	}
-	vmstat.nfree = 256;
+	vmstat.nfree = SOFT_NPAGES;
 }
 
 int
@@ -81,7 +81,7 @@ vmp_page_retain_locked(vm_page_t *page)
 void
 vmp_page_release_locked(vm_page_t *page)
 {
-	kassert(page >= mypages && page <= &mypages[256]);
+	kassert(page >= mypages && page <= &mypages[SOFT_NPAGES]);
 	kassert(page->refcnt > 0);
 	kassert(page->use != kPageUseFree);
 
@@ -120,7 +120,7 @@ vm_page_t *
 vmp_paddr_to_page(paddr_t paddr)
 {
 	kassert(paddr % PGSIZE == 0);
-	kassert(paddr / PGSIZE < 256);
+	kassert(paddr / PGSIZE < SOFT_NPAGES);
 	return &mypages[paddr / PGSIZE];
 }
 
@@ -151,7 +151,7 @@ vm_dump_pages(void)
 	vm_page_t *page;
 
 	kprintf("Page states:\n");
-	for (pfn_t i = 0; i < 256; i++) {
+	for (pfn_t i = 0; i < SOFT_NPAGES; i++) {
 		page = &mypages[i];
 		if (mypages[i].use == kPageUseFree)
 			continue;
