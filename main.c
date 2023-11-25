@@ -5,7 +5,7 @@
 #include "vm/vmp.h"
 
 __thread ipl_t SIM_ipl = kIPL0;
-pthread_t swapper_thread;
+pthread_t pgwriter_thread, balancer_thread;
 eprocess_t kernel_ps;
 
 void
@@ -64,7 +64,7 @@ main(int argc, char *arv[])
 	void SIM_paging_init(void);
 	void vm_dump_pages(void);
 	void vmp_wsl_dump(eprocess_t * ps);
-	void *vmp_pgwriter(void*);
+	void *vmp_pgwriter(void *), *vmp_balancer(void *);
 
 	SIM_pages_init();
 	SIM_paging_init();
@@ -83,9 +83,11 @@ main(int argc, char *arv[])
 	kernel_ps.wsl.max = 4;
 	pthread_mutex_init(&kernel_ps.ws_lock, NULL);
 
+	ke_event_init(&vmp_balancer_event, false);
 	ke_event_init(&vmp_pgwriter_event, false);
 	ke_event_init(&vmp_sufficient_pages_event, false);
-	pthread_create(&swapper_thread, NULL, vmp_pgwriter, NULL);
+	pthread_create(&pgwriter_thread, NULL, vmp_pgwriter, NULL);
+	pthread_create(&balancer_thread, NULL, vmp_balancer, NULL);
 
 #if 0
 	printf("Wiring round 1\n");

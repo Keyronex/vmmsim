@@ -4,6 +4,7 @@
 #include "vm.h"
 #include "vm/vmp.h"
 
+bool vmp_was_shortage = false;
 uint8_t SOFT_pages[4096 * SOFT_NPAGES] __attribute__((aligned(PGSIZE)));
 static vm_page_t mypages[SOFT_NPAGES] __attribute__((aligned(PGSIZE)));
 kspinlock_t vmp_pfn_lock = KSPINLOCK_INITIALISER;
@@ -29,6 +30,26 @@ SIM_pages_init(void)
 	vmstat.nfree = SOFT_NPAGES;
 }
 
+bool
+check_shortage(void)
+{
+	if (vmp_page_shortage()) {
+		vmp_was_shortage = true;
+
+		ke_event_clear(&vmp_sufficient_pages_event);
+
+		if (vmstat.nmodified > 4)
+			ke_event_signal(&vmp_pgwriter_event);
+
+		if ((vmstat.nmodified + vmstat.nstandby) <
+		    vmparam.min_avail_for_alloc * 2)
+			ke_event_signal(&vmp_balancer_event);
+
+		return true;
+	}
+	return false;
+}
+
 int
 vmp_page_alloc_locked(vm_page_t **out, enum vm_page_use use, bool must)
 {
@@ -36,11 +57,8 @@ vmp_page_alloc_locked(vm_page_t **out, enum vm_page_use use, bool must)
 
 	kassert(ke_spinlock_held(&vmp_pfn_lock));
 
-	if (vmp_page_shortage() && !must) {
-		ke_event_clear(&vmp_sufficient_pages_event);
-		ke_event_signal(&vmp_pgwriter_event);
+	if (check_shortage() && !must)
 		return -1;
-	}
 
 	page = TAILQ_FIRST(&free_pgq);
 	kassert(page != NULL);
@@ -118,6 +136,12 @@ vmp_page_release_locked(vm_page_t *page)
 		} else {
 			TAILQ_INSERT_TAIL(&standby_pgq, page, queue_link);
 			vmstat.nstandby += 1;
+		}
+
+		check_shortage();
+		if (vmp_was_shortage && vmp_page_sufficience()) {
+			vmp_was_shortage = false;
+			ke_event_signal(&vmp_sufficient_pages_event);
 		}
 	}
 }

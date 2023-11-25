@@ -7,7 +7,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "nanokern.h"
 #include "vmpsoft.h"
 
 typedef TAILQ_HEAD(vmp_page_queue, vm_page) vmp_page_queue_t;
@@ -103,6 +102,9 @@ void vmp_wsl_lock_entry(struct eprocess *ps, vaddr_t vaddr)
 void vmp_wsl_unlock_entry(struct eprocess *ps, vaddr_t vaddr)
     LOCK_REQUIRES(ps->ws_lock);
 
+int vmp_wsl_trim_n(struct eprocess *ps, size_t count) LOCK_REQUIRES(ps->ws_lock)
+    LOCK_EXCLUDES(vmp_pfn_lock);
+
 /*!
  * @brief Wire a PTE.
  * @pre WS lock held. (May be dropped and reacquired!)
@@ -165,13 +167,17 @@ int vm_ps_map_section_view(struct eprocess *ps, void *section, vaddr_t *vaddrp,
 
 /* bool vmp_page_shortage(void) LOCK_REQUIRES(vmp_pfn_lock) */
 #define vmp_page_shortage() \
-	((vmstat.nfree + vmstat.nstandby) < vmparam.min_avail_for_alloc)
+	((vmstat.nfree + vmstat.nstandby) <= vmparam.min_avail_for_alloc)
+
+/* bool vmp_page_sufficience(void) LOCK_REQUIRES(vmp_pfn_lock) */
+#define vmp_page_sufficience() \
+	((vmstat.nfree + vmstat.nstandby) >= (vmparam.min_avail_for_alloc * 2))
 
 extern struct vm_param vmparam;
 extern struct vm_stat vmstat;
 extern kspinlock_t vmp_pfn_lock;
 extern kevent_t vmp_sufficient_pages_event;
-extern kevent_t vmp_pgwriter_event;
+extern kevent_t vmp_pgwriter_event, vmp_balancer_event;
 extern vmp_page_queue_t free_pgq, standby_pgq, modified_pgq;
 
 #endif /* KRX_VM_VMP_H */

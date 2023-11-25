@@ -1,5 +1,6 @@
 #include <kdk/executive.h>
 
+#include "defs.h"
 #include "vmp.h"
 
 struct vmp_wsle {
@@ -135,6 +136,22 @@ vmp_wsl_unlock_entry(eprocess_t *ps, vaddr_t vaddr)
 	kassert(wsle != NULL);
 	TAILQ_INSERT_TAIL(&ps->wsl.queue, wsle, queue_entry);
 	ps->wsl.nlocked--;
+}
+
+int
+vmp_wsl_trim_n(eprocess_t *ps, size_t count) LOCK_REQUIRES(ps->ws_lock)
+    LOCK_EXCLUDES(vmp_pfn_lock)
+{
+	for (int i = 0; i < count; i++) {
+		struct vmp_wsle *wsle;
+		ipl_t ipl = vmp_acquire_pfn_lock();
+		wsle = wsl_trim_1(ps);
+		vmp_release_pfn_lock(ipl);
+		if (wsle == NULL)
+			return i;
+		kmem_free(wsle, sizeof(struct vmp_wsle));
+	}
+	return count;
 }
 
 void
