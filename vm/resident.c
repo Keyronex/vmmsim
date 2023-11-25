@@ -143,6 +143,17 @@ vm_mdl_alloc(vm_mdl_t **out, size_t npages)
 	*out = mdl;
 }
 
+void
+vm_mdl_release_pages(vm_mdl_t *mdl)
+{
+	for (int i = 0; i < mdl->nentries; i++) {
+		ipl_t ipl = vmp_acquire_pfn_lock();
+		vmp_page_release_locked(mdl->pages[i]);
+		vmp_release_pfn_lock(ipl);
+		mdl->pages[i] = NULL;
+	}
+}
+
 static const char *
 vm_page_use_str(enum vm_page_use use)
 {
@@ -188,4 +199,13 @@ vm_dump_pages(void)
 		kprintf("- PFN %lu: Use %s Page %p\n", (uintptr_t)page->pfn,
 		    vm_page_use_str(page->use), page);
 	}
+}
+
+void
+vm_dump_page_summary(void)
+{
+	kprintf("\033[7m%-9s%-9s%-9s%-9s\033[m\n", "act", "mod", "stby",
+	    "free");
+	kprintf("%-9zu%-9zu%-9zu%-9zu\n", vmstat.nactive, vmstat.nmodified,
+	    vmstat.nstandby, vmstat.nfree);
 }

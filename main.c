@@ -61,11 +61,13 @@ int
 main(int argc, char *arv[])
 {
 	void SIM_pages_init(void);
+	void SIM_paging_init(void);
 	void vm_dump_pages(void);
 	void vmp_wsl_dump(eprocess_t * ps);
 	void *vmp_pgwriter(void*);
 
 	SIM_pages_init();
+	SIM_paging_init();
 
 	vm_page_t *page;
 	vmp_page_alloc_locked(&page, kPageUsePML4, true);

@@ -115,5 +115,6 @@ enum vmp_pte_kind {
 
 int vm_fault(vaddr_t vaddr, bool write, vm_mdl_t *out);
 void vm_mdl_alloc(vm_mdl_t **out, size_t max_pages);
+void vm_mdl_release_pages(vm_mdl_t *mdl);
 
 #endif /* KRX_KDK_VM_H */

@@ -5,17 +5,16 @@
 
 #include <sys/param.h>
 
+#include <kdk/io.h>
 #include <kdk/libkern.h>
 #include <kdk/nanokern.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include "vmp.h"
 
 #define MAX_CLUSTER 8
 #define MAX_IOPS 32
-
-typedef struct iop {
-	kevent_t event;
-} iop_t;
 
 typedef struct vmp_pagefile {
 	vnode_t *vnode;
@@ -75,6 +74,17 @@ vmp_pagefile_alloc(vmp_pagefile_t *pf)
 	return -1;
 }
 
+void
+SIM_paging_init(void)
+{
+	static vnode_t vnode;
+
+	vnode.fd = open("pagefile", O_RDWR);
+	kassert(vnode.fd != -1);
+
+	init_vmp_pagefile(&vmp_pagefile, &vnode, 1024 * 1024);
+}
+
 void *
 vmp_pgwriter(void *)
 {
@@ -92,6 +102,10 @@ vmp_pgwriter(void *)
 
 loop:
 	ke_event_wait(&vmp_pgwriter_event, NS_PER_S);
+
+	printf("Pgwriter wakes\n");
+
+	vm_dump_page_summary();
 
 	if (vmp_page_shortage())
 		n_to_clean = MAX(32, vmstat.nmodified / 30);
@@ -111,6 +125,8 @@ loop:
 			vmp_release_pfn_lock(ipl);
 			break;
 		}
+
+		/* this removes it from the queue */
 		vmp_page_retain_locked(page);
 
 		/* TODO(feature): clustered writeback */
@@ -134,14 +150,30 @@ loop:
 			mdl->nentries = 1;
 			mdl->pages[0] = page;
 
-			/* write out the page.... */
+			kprintf("Paging out %lu\n", page->pfn);
+			iop_init_vnode_write(iop, vmp_pagefile.vnode, mdl,
+			    PGSIZE, page->drumslot * PGSIZE);
 
-			kfatal("Write out the page\n");
+			page->dirty = false;
+			vmp_release_pfn_lock(ipl);
+
+			iop_send(iop);
+			n_iops++;
+
+			break;
 		}
 
 		default:
 			kfatal("Can't clean this page.\n");
 		}
+	}
+
+	if (n_iops > 0) {
+		for (int i = 0; i < n_iops; i++)
+			ke_event_wait(wait_events[i], -1);
+
+		for (int i = 0; i < n_iops; i++)
+			vm_mdl_release_pages(mdls[i]);
 	}
 
 	goto loop;
