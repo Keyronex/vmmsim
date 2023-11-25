@@ -100,6 +100,8 @@ void
 vmp_pte_wire_state_release(struct vmp_pte_wire_state *state)
 {
 	for (int i = 0; i < VMP_TABLE_LEVELS; i++) {
+		if (state->pages[i] == NULL)
+			continue;
 		vmp_pagetable_page_pte_deleted(state->ps, state->pages[i],
 		    false);
 	}
@@ -211,7 +213,7 @@ vmp_wire_pte(eprocess_t *ps, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 
 			pages[level - 2] = page;
 
-			/* manually adjust the page */
+			/* manually adjust the new page */
 			vmp_page_retain_locked(page);
 			page->nonzero_ptes++;
 			page->nonswap_ptes++;

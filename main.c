@@ -63,7 +63,7 @@ main(int argc, char *arv[])
 	void SIM_pages_init(void);
 	void vm_dump_pages(void);
 	void vmp_wsl_dump(eprocess_t * ps);
-	void *vmp_swapper(void*);
+	void *vmp_pgwriter(void*);
 
 	SIM_pages_init();
 
@@ -73,6 +73,7 @@ main(int argc, char *arv[])
 	kernel_ps.pml4_page = page;
 	vmparam.ws_page_expansion_count = 4;
 	vmparam.min_avail_for_expansion = 8;
+	vmparam.min_avail_for_alloc = 4;
 	RB_INIT(&kernel_ps.wsl.tree);
 	TAILQ_INIT(&kernel_ps.wsl.queue);
 	kernel_ps.wsl.nlocked = 0;
@@ -80,8 +81,9 @@ main(int argc, char *arv[])
 	kernel_ps.wsl.max = 4;
 	pthread_mutex_init(&kernel_ps.ws_lock, NULL);
 
-	ke_event_init(&vmp_swapper_event, false);
-	pthread_create(&swapper_thread, NULL, vmp_swapper, NULL);
+	ke_event_init(&vmp_pgwriter_event, false);
+	ke_event_init(&vmp_sufficient_pages_event, false);
+	pthread_create(&swapper_thread, NULL, vmp_pgwriter, NULL);
 
 #if 0
 	printf("Wiring round 1\n");
@@ -104,9 +106,10 @@ main(int argc, char *arv[])
 #if 1
 	for (int i = 0; i < 10; i++) {
 		for (int j = 0; j < 8; j++) {
-			access(PGSIZE * j, false);
-			access(4294967296 + PGSIZE * j, false);
-			access(4294967296 * 2 + PGSIZE * j, false);
+			bool write = true;
+			access(PGSIZE * j, write);
+			access(4294967296 + PGSIZE * j, write);
+			access(4294967296 * 2 + PGSIZE * j, write);
 		}
 	}
 #endif

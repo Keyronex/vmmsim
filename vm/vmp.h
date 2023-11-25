@@ -14,6 +14,7 @@ typedef TAILQ_HEAD(vmp_page_queue, vm_page) vmp_page_queue_t;
 
 struct vm_stat {
 	size_t nfree, nmodified, nstandby, nactive;
+	size_t ntotal;
 };
 
 struct vm_param {
@@ -21,6 +22,8 @@ struct vm_param {
 	size_t ws_page_expansion_count;
 	/*! minimum available pages for WS expansion */
 	size_t min_avail_for_expansion;
+	/*! minimum available pages for regular allocations */
+	size_t min_avail_for_alloc;
 };
 
 struct vmp_pte_wire_state {
@@ -160,9 +163,15 @@ int vm_ps_map_section_view(struct eprocess *ps, void *section, vaddr_t *vaddrp,
 /* void vmp_release_pfn_lock(ipl_t ipl) */
 #define vmp_release_pfn_lock(IPL) ke_spinlock_release(&vmp_pfn_lock, IPL)
 
+/* bool vmp_page_shortage(void) LOCK_REQUIRES(vmp_pfn_lock) */
+#define vmp_page_shortage() \
+	((vmstat.nfree + vmstat.nstandby) < vmparam.min_avail_for_alloc)
+
 extern struct vm_param vmparam;
 extern struct vm_stat vmstat;
 extern kspinlock_t vmp_pfn_lock;
-extern kevent_t vmp_swapper_event;
+extern kevent_t vmp_sufficient_pages_event;
+extern kevent_t vmp_pgwriter_event;
+extern vmp_page_queue_t free_pgq, standby_pgq, modified_pgq;
 
 #endif /* KRX_VM_VMP_H */

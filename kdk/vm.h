@@ -93,7 +93,7 @@ typedef struct vm_page {
 	};
 
 	/* 7th word */
-	uintptr_t swap_descriptor;
+	uintptr_t drumslot;
 } vm_page_t;
 
 /*!
@@ -114,5 +114,6 @@ enum vmp_pte_kind {
 };
 
 int vm_fault(vaddr_t vaddr, bool write, vm_mdl_t *out);
+void vm_mdl_alloc(vm_mdl_t **out, size_t max_pages);
 
 #endif /* KRX_KDK_VM_H */

@@ -4,7 +4,6 @@
 #include "vm.h"
 #include "vm/vmp.h"
 
-
 uint8_t SOFT_pages[4096 * SOFT_NPAGES] __attribute__((aligned(PGSIZE)));
 static vm_page_t mypages[SOFT_NPAGES] __attribute__((aligned(PGSIZE)));
 kspinlock_t vmp_pfn_lock = KSPINLOCK_INITIALISER;
@@ -37,6 +36,12 @@ vmp_page_alloc_locked(vm_page_t **out, enum vm_page_use use, bool must)
 
 	kassert(ke_spinlock_held(&vmp_pfn_lock));
 
+	if (vmp_page_shortage() && !must) {
+		ke_event_clear(&vmp_sufficient_pages_event);
+		ke_event_signal(&vmp_pgwriter_event);
+		return -1;
+	}
+
 	page = TAILQ_FIRST(&free_pgq);
 	kassert(page != NULL);
 	TAILQ_REMOVE(&free_pgq, page, queue_link);
@@ -47,6 +52,7 @@ vmp_page_alloc_locked(vm_page_t **out, enum vm_page_use use, bool must)
 	page->refcnt = 1;
 	page->use = use;
 	page->dirty = false;
+	page->drumslot = -1;
 
 	vmstat.nfree--;
 	vmstat.nactive++;
@@ -122,6 +128,19 @@ vmp_paddr_to_page(paddr_t paddr)
 	kassert(paddr % PGSIZE == 0);
 	kassert(paddr / PGSIZE < SOFT_NPAGES);
 	return &mypages[paddr / PGSIZE];
+}
+
+#define MDL_SIZE(NPAGES) (sizeof(vm_mdl_t) + sizeof(vm_page_t *) * NPAGES)
+
+void
+vm_mdl_alloc(vm_mdl_t **out, size_t npages)
+{
+	vm_mdl_t *mdl = kmem_alloc(MDL_SIZE(npages));
+	mdl->nentries = npages;
+	mdl->offset = 0;
+	for (unsigned i = 0; i < npages; i++)
+		mdl->pages[i] = 0;
+	*out = mdl;
 }
 
 static const char *

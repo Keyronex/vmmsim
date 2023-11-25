@@ -90,8 +90,8 @@ vmp_wsl_insert(eprocess_t *ps, vaddr_t vaddr, bool locked)
 	kassert(ps->wsl.nentries <= ps->wsl.max);
 
 	if (ps->wsl.nentries == ps->wsl.max && wsl_try_expand(ps) == false) {
-	 wsle = wsl_trim_1(ps);
-	 kassert(wsle != NULL);
+		wsle = wsl_trim_1(ps);
+		kassert(wsle != NULL);
 	}
 
 	if (wsle == NULL)
