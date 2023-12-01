@@ -120,6 +120,7 @@ main(int argc, char *arv[])
 
 	vmp_wsl_dump(&kernel_ps);
 	vm_dump_pages();
+	vm_dump_page_summary();
 
-	for (;;) ;
+	kprintf("Simulation complete.\n");
 }

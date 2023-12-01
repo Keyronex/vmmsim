@@ -85,9 +85,34 @@ SIM_paging_init(void)
 	init_vmp_pagefile(&vmp_pagefile, &vnode, 1024 * 1024);
 }
 
+static void
+cluster_anon(vm_mdl_t *mdl, iop_t *iop, vm_page_t *page)
+{
+	pte_t *page_pte = (pte_t*)P2V(page->referent_pte);
+
+	kprintf(" !!! Referent PTE is %p; Position in Kluster: %lu\n", page_pte, ((uintptr_t)page_pte % (16 * sizeof(pte_t))) / sizeof(pte_t));
+
+	if (page->drumslot == -1) {
+		uintptr_t swapdesc;
+		swapdesc = vmp_pagefile_alloc(&vmp_pagefile);
+		page->drumslot = swapdesc;
+	}
+
+	mdl->offset = 0;
+	mdl->nentries = 1;
+	mdl->pages[0] = page;
+
+	kprintf("Paging out %lu\n", page->pfn);
+	iop_init_vnode_write(iop, vmp_pagefile.vnode, mdl, PGSIZE,
+	    page->drumslot * PGSIZE);
+
+	page->dirty = false;
+}
+
 void *
 vmp_pgwriter(void *)
 {
+	ipl_t ipl;
 	size_t n_to_clean;
 	size_t n_iops;
 	iop_t *iops = kmem_alloc(sizeof(iop_t) * MAX_IOPS);
@@ -103,10 +128,6 @@ vmp_pgwriter(void *)
 loop:
 	ke_event_wait(&vmp_pgwriter_event, NS_PER_S);
 
-	printf("Pgwriter wakes\n");
-
-	vm_dump_page_summary();
-
 	if (vmp_page_shortage())
 		n_to_clean = MAX(32, vmstat.nmodified / 30);
 	else
@@ -116,8 +137,6 @@ loop:
 
 	while (n_to_clean > 0 && n_iops < MAX_IOPS) {
 		vm_page_t *page;
-		ipl_t ipl;
-
 		ipl = vmp_acquire_pfn_lock();
 		page = TAILQ_FIRST(&modified_pgq);
 		if (page == NULL) {
@@ -140,21 +159,7 @@ loop:
 			vm_mdl_t *mdl = mdls[n_iops];
 			iop_t *iop = &iops[n_iops];
 
-			if (page->drumslot == -1) {
-				uintptr_t swapdesc;
-				swapdesc = vmp_pagefile_alloc(&vmp_pagefile);
-				page->drumslot = swapdesc;
-			}
-
-			mdl->offset = 0;
-			mdl->nentries = 1;
-			mdl->pages[0] = page;
-
-			kprintf("Paging out %lu\n", page->pfn);
-			iop_init_vnode_write(iop, vmp_pagefile.vnode, mdl,
-			    PGSIZE, page->drumslot * PGSIZE);
-
-			page->dirty = false;
+			cluster_anon(mdl, iop, page);
 			vmp_release_pfn_lock(ipl);
 
 			iop_send(iop);
@@ -164,7 +169,7 @@ loop:
 		}
 
 		default:
-			kfatal("Can't clean this page.\n");
+			kfatal("Can't clean this type of page yet.\n");
 		}
 	}
 
@@ -175,6 +180,14 @@ loop:
 		for (int i = 0; i < n_iops; i++)
 			vm_mdl_release_pages(mdls[i]);
 	}
+
+	/* need test here for few modified pages (go back to slow writeback) */
+#if 0
+	ipl = vmp_acquire_pfn_lock();
+	if (vmp_page_sufficience())
+		ke_event_clear(&vmp_pgwriter_event);
+	vmp_release_pfn_lock(ipl);
+#endif
 
 	goto loop;
 }

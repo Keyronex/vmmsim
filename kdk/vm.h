@@ -117,4 +117,7 @@ int vm_fault(vaddr_t vaddr, bool write, vm_mdl_t *out);
 void vm_mdl_alloc(vm_mdl_t **out, size_t max_pages);
 void vm_mdl_release_pages(vm_mdl_t *mdl);
 
+void vm_dump_pages(void);
+void vm_dump_page_summary(void);
+
 #endif /* KRX_KDK_VM_H */

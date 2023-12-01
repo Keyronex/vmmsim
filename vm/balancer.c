@@ -31,8 +31,7 @@ loop:
 	}
 
 	ipl = vmp_acquire_pfn_lock();
-	if ((vmstat.nmodified + vmstat.nstandby) >=
-	    vmparam.min_avail_for_alloc * 2)
+	if (vmp_page_sufficience())
 		ke_event_clear(&vmp_balancer_event);
 	vmp_release_pfn_lock(ipl);
 
