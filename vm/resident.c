@@ -50,6 +50,49 @@ check_shortage(void)
 	return false;
 }
 
+static vm_page_t *
+steal_page(enum vm_page_use use)
+{
+	vm_page_t *page;
+
+	kassert(ke_spinlock_held(&vmp_pfn_lock));
+
+	page = TAILQ_FIRST(&standby_pgq);
+	if (page == NULL)
+		return NULL;
+
+	TAILQ_REMOVE(&standby_pgq, page, queue_link);
+
+	switch (page->use) {
+	case kPageUseAnonPrivate: {
+		pte_t *pte = (pte_t *)P2V(page->referent_pte);
+		vm_page_t *table_page = vmp_paddr_to_page(
+		    (page->referent_pte / PGSIZE) * PGSIZE);
+		vmp_pte_swap_create(pte, page->drumslot);
+		// vmp_pagetable_page_pte_became_swap(ps, table_page)
+		break;
+	}
+
+	default:
+		kfatal("Can't steal page of use %d\n", page->use);
+	}
+
+	kassert(page->refcnt == 0);
+	kassert(page->nonzero_ptes == 0);
+	page->referent_pte = 0;
+	page->refcnt = 1;
+	page->use = use;
+	page->dirty = false;
+	page->drumslot = -1;
+
+	vmstat.nstandby--;
+	vmstat.nactive++;
+
+	memset((void *)vm_page_direct_map_addr(page), 0x0, PGSIZE);
+
+	return page;
+}
+
 int
 vmp_page_alloc_locked(vm_page_t **out, enum vm_page_use use, bool must)
 {
@@ -61,8 +104,19 @@ vmp_page_alloc_locked(vm_page_t **out, enum vm_page_use use, bool must)
 		return -1;
 
 	page = TAILQ_FIRST(&free_pgq);
-	kassert(page != NULL);
-	TAILQ_REMOVE(&free_pgq, page, queue_link);
+	if (page == NULL) {
+		page = steal_page(use);
+		if (page == NULL) {
+			if (must)
+				kfatal("Out of pages\n");
+			else
+				return -1;
+		}
+
+		*out = page;
+		return 0;
+	} else
+		TAILQ_REMOVE(&free_pgq, page, queue_link);
 
 	kassert(page->refcnt == 0);
 	kassert(page->nonzero_ptes == 0);

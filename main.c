@@ -109,7 +109,7 @@ main(int argc, char *arv[])
 
 #if 1
 	for (int i = 0; i < 10; i++) {
-		for (int j = 0; j < 8; j++) {
+		for (int j = 0; j < 9; j++) {
 			bool write = true;
 			access(PGSIZE * j, write);
 			access(4294967296 + PGSIZE * j, write);

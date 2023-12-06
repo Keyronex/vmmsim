@@ -7,6 +7,16 @@
 #define VMP_TABLE_LEVELS 4
 #define VMP_PAGE_SHIFT 12
 
+#define VMP_LEVEL_4_ENTRIES 512
+#define VMP_LEVEL_4_STEP 1
+#define VMP_LEVEL_3_ENTRIES 512
+#define VMP_LEVEL_3_STEP 1
+#define VMP_LEVEL_2_ENTRIES 512
+#define VMP_LEVEL_2_STEP 1
+#define VMP_LEVEL_1_ENTRIES 512
+#define VMP_LEVEL_1_STEP 1
+
+
 typedef struct pte_hw {
 	bool valid : 1;
 	bool writeable : 1;
@@ -31,7 +41,7 @@ enum vmp_soft_pte_kind {
 
 typedef struct pte_swap {
 	bool valid : 1;
-	uintptr_t swap_desc : 61;
+	uintptr_t drumslot : 61;
 	enum vmp_soft_pte_kind kind : 2;
 } pte_swap_t;
 
@@ -111,6 +121,14 @@ vmp_pte_trans_create(pte_t *pte, pfn_t pfn)
 	pte->trans.valid = 0;
 	pte->trans.kind = kSoftPteKindTrans;
 	pte->trans.pfn = pfn;
+}
+
+static inline void
+vmp_pte_swap_create(pte_t *pte, uintptr_t drumslot)
+{
+	pte->swap.valid = 0;
+	pte->swap.kind = kSoftPteKindSwap;
+	pte->swap.drumslot = drumslot;
 }
 
 static inline bool

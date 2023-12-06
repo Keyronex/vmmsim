@@ -1,8 +1,6 @@
 #include <kdk/executive.h>
 #include <string.h>
 
-#include "vm.h"
-#include "vm/vmpsoft.h"
 #include "vmp.h"
 
 static bool
@@ -21,6 +19,14 @@ vmp_pagetable_page_nonswap_pte_created(eprocess_t *ps, vm_page_t *page,
 	if (page->nonswap_ptes++ == 0 && !page_is_root_table(page)) {
 		vmp_wsl_lock_entry(ps, P2V(vmp_page_paddr(page)));
 	}
+}
+
+void
+vmp_pagetable_page_pte_became_swap(eprocess_t *ps, vm_page_t *page)
+{
+	if (page->nonswap_ptes-- == 1 && !page_is_root_table(page))
+		vmp_wsl_unlock_entry(ps, P2V(vmp_page_paddr(page)));
+	vmp_page_release_locked(page);
 }
 
 static void vmp_md_delete_table_pointers(struct eprocess *ps,
@@ -258,4 +264,44 @@ vmp_fetch_pte(eprocess_t *ps, vaddr_t vaddr, pte_t **pte_out)
 		table = (pte_t *)P2V(vmp_pte_hw_paddr(pte, level));
 	}
 	kfatal("unreached\n");
+}
+
+int
+vmp_fork(eprocess_t *ps1, eprocess_t *ps2)
+{
+	pte_t *l4table = ps1->pml4;
+	int indexes[VMP_TABLE_LEVELS + 1];
+	vm_page_t *pages[VMP_TABLE_LEVELS] = { 0 };
+
+	ke_wait(&ps1->vad_lock, "vmp_fork:ps1->vad_lock", false, false, -1);
+	ke_wait(&ps2->vad_lock, "vmp_fork:ps1->vad_lock", false, false, -1);
+
+#if VMP_TABLE_LEVELS >= 4
+	for (int i4 = 0; i4 < VMP_LEVEL_4_ENTRIES; i4 += VMP_LEVEL_4_STEP) {
+		pte_t *l4pte = &l4table[i4];
+#endif
+
+#if VMP_TABLE_LEVELS >= 3
+		for (int i3 = 0; i3 < VMP_LEVEL_3_ENTRIES;
+		     i3 += VMP_LEVEL_3_STEP) {
+#endif
+#if VMP_TABLE_LEVELS >= 2
+			for (int i2 = 0; i2 < VMP_LEVEL_2_ENTRIES;
+			     i2 += VMP_LEVEL_2_STEP) {
+#endif
+				for (int i1 = 0; i1 < VMP_LEVEL_1_ENTRIES;
+				     i1 += VMP_LEVEL_1_STEP) {
+				}
+#if VMP_TABLE_LEVELS >= 2
+			}
+#endif
+#if VMP_TABLE_LEVELS >= 3
+		}
+#endif
+#if VMP_TABLE_LEVELS >= 4
+	}
+#endif
+
+	ke_mutex_release(&ps2->vad_lock);
+	ke_mutex_release(&ps1->vad_lock);
 }

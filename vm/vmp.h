@@ -134,6 +134,15 @@ void vmp_pagetable_page_nonswap_pte_created(struct eprocess *ps,
     vm_page_t *page, bool is_new) LOCK_REQUIRES(ps->ws_lock)
     LOCK_REQUIRES(pfn_lock);
 
+/*!
+ * @brief Update pagetable page after nonswap PTE became swap.
+ *
+ * This will amend the PFNDB entry's nonswap PTE count, and if the nonswap PTE
+ * count reaches 0, unlock the page from the the working set.
+ */
+void vmp_pagetable_page_pte_became_swap(struct eprocess *ps, vm_page_t *page)
+    LOCK_REQUIRES(ps->ws_lock) LOCK_REQUIRES(pfn_lock);
+
 vm_vad_t *vmp_ps_vad_find(struct eprocess *ps, vaddr_t vaddr);
 int vm_ps_allocate(struct eprocess *ps, vaddr_t *vaddrp, size_t size,
     bool exact);
