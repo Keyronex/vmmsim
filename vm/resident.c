@@ -69,7 +69,8 @@ steal_page(enum vm_page_use use)
 		vm_page_t *table_page = vmp_paddr_to_page(
 		    (page->referent_pte / PGSIZE) * PGSIZE);
 		vmp_pte_swap_create(pte, page->drumslot);
-		// vmp_pagetable_page_pte_became_swap(ps, table_page)
+		/* get ps from owner field */
+		vmp_pagetable_page_pte_became_swap(page->process, table_page);
 		break;
 	}
 

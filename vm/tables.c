@@ -221,6 +221,7 @@ vmp_wire_pte(eprocess_t *ps, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 
 			/* manually adjust the new page */
 			vmp_page_retain_locked(page);
+			page->process = ps;
 			page->nonzero_ptes++;
 			page->nonswap_ptes++;
 			page->referent_pte = V2P(pte);

@@ -62,6 +62,7 @@ do_fault(vaddr_t vaddr, bool write, vm_mdl_t *out)
 				goto out;
 			}
 
+			page->process = ps;
 			vmp_pte_hw_create(pte_state.pte, page->pfn,
 			    write & vad->flags.writeable);
 			vmp_pagetable_page_nonswap_pte_created(ps,
@@ -94,6 +95,18 @@ do_fault(vaddr_t vaddr, bool write, vm_mdl_t *out)
 			out->pages[out->offset / PGSIZE] = page;
 			out->offset += PGSIZE;
 		}
+	} else if (pte_kind == kPTEKindSwap) {
+
+		vm_page_t *page;
+		int r;
+
+		r = vmp_page_alloc_locked(&page, kPageUseAnonPrivate, false);
+		if (r != 0) {
+			ret = r;
+			goto out;
+		}
+
+		kfatal("Unhandled swap pte\n");
 	} else {
 		kfatal("Unhandled PTE kind %d\n", pte_kind);
 	}

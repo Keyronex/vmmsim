@@ -71,6 +71,7 @@ main(int argc, char *arv[])
 
 	vm_page_t *page;
 	vmp_page_alloc_locked(&page, kPageUsePML4, true);
+	page->process = &kernel_ps;
 	kernel_ps.pml4 = (void *)P2V(vmp_page_paddr(page));
 	kernel_ps.pml4_page = page;
 	vmparam.ws_page_expansion_count = 4;
