@@ -1,8 +1,21 @@
 #include <kdk/executive.h>
 
+#include "io.h"
+#include "nanokern.h"
 #include "vm.h"
 #include "vm/vmpsoft.h"
 #include "vmp.h"
+
+struct vmp_pager_state *
+vmp_pager_state_alloc()
+{
+	vmp_pager_state_t *state = kmem_alloc(sizeof(*state));
+	if (state == NULL)
+		return NULL;
+	state->refcount = 1;
+	ke_event_init(&state->event, false);
+	return state;
+}
 
 static int
 do_fault(vaddr_t vaddr, bool write, vm_mdl_t *out)
@@ -97,7 +110,10 @@ do_fault(vaddr_t vaddr, bool write, vm_mdl_t *out)
 		}
 	} else if (pte_kind == kPTEKindSwap) {
 
+		struct vmp_pager_state *pager_state;
+		vm_mdl_t *mdl;
 		vm_page_t *page;
+		iop_t iop;
 		int r;
 
 		r = vmp_page_alloc_locked(&page, kPageUseAnonPrivate, false);
@@ -105,14 +121,58 @@ do_fault(vaddr_t vaddr, bool write, vm_mdl_t *out)
 			ret = r;
 			goto out;
 		}
+		page->process = ps;
+		page->referent_pte = V2P(pte_state.pte);
 
-		kfatal("Unhandled swap pte\n");
+		pager_state = vmp_pager_state_alloc();
+		vm_mdl_alloc(&mdl, 1);
+		kassert(pager_state != NULL);
+		kassert(mdl != NULL);
+
+		vmp_pte_busy_create(pte_state.pte, pager_state);
+		vmp_pagetable_page_nonswap_pte_created(ps, pte_state.pages[0],
+		    false);
+		vmp_wsl_insert(ps, vaddr, true);
+
+		vmp_pte_wire_state_release(&pte_state);
+		vmp_release_pfn_lock(ipl);
+		ke_mutex_release(&ps->ws_lock);
+		ke_mutex_release(&ps->vad_lock);
+
+		mdl->offset = 0;
+		mdl->nentries = 1;
+		mdl->pages[0] = page;
+
+		ke_event_init(&iop.event, false);
+		iop_init_vnode_read(&iop, vmp_pagefile.vnode, mdl, PGSIZE,
+		    page->drumslot * PGSIZE);
+		iop_send(&iop);
+
+		ke_event_wait(&iop.event, -1);
+
+		ke_wait(&ps->vad_lock, "ps->vad_lock reacquire swapin", false,
+		    false, -1);
+		ke_wait(&ps->ws_lock, "ps->ws_lock reacquire swapin", false,
+		    false, -1);
+		vmp_acquire_pfn_lock();
+
+		if (out != NULL) {
+			vmp_page_retain_locked(page);
+			out->pages[out->offset / PGSIZE] = page;
+			out->offset += PGSIZE;
+		}
+
+		vmp_pte_hw_create(pte_state.pte, page->pfn, false);
+		vmp_wsl_unlock_entry(ps, vaddr);
+
+		goto out_no_pte_wire_state_release;
 	} else {
 		kfatal("Unhandled PTE kind %d\n", pte_kind);
 	}
 
 out:
 	vmp_pte_wire_state_release(&pte_state);
+out_no_pte_wire_state_release:
 	vmp_release_pfn_lock(ipl);
 	ke_mutex_release(&ps->ws_lock);
 	ke_mutex_release(&ps->vad_lock);

@@ -16,14 +16,6 @@
 #define MAX_CLUSTER 8
 #define MAX_IOPS 32
 
-typedef struct vmp_pagefile {
-	vnode_t *vnode;
-	uint8_t *bitmap;
-	size_t total_slots;
-	size_t free_slots;
-	size_t next_free;
-} vmp_pagefile_t;
-
 kevent_t vmp_sufficient_pages_event;
 kevent_t vmp_pgwriter_event;
 vmp_pagefile_t vmp_pagefile;

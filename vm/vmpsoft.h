@@ -103,10 +103,12 @@ vmp_pte_hw_pfn(pte_t *pte, int level)
 static inline void
 vmp_pte_hw_create(pte_t *pte, pfn_t pfn, bool writeable)
 {
-	pte->u64 = 0x0;
-	pte->hw.valid = 1;
-	pte->hw.writeable = writeable;
-	pte->hw.pfn = pfn;
+	pte_t newpte;
+	newpte.u64 = 0x0;
+	newpte.hw.valid = 1;
+	newpte.hw.writeable = writeable;
+	newpte.hw.pfn = pfn;
+	pte->u64 = newpte.u64;
 }
 
 static inline void
@@ -118,17 +120,31 @@ vmp_pte_zero_create(pte_t *pte)
 static inline void
 vmp_pte_trans_create(pte_t *pte, pfn_t pfn)
 {
-	pte->trans.valid = 0;
-	pte->trans.kind = kSoftPteKindTrans;
-	pte->trans.pfn = pfn;
+	pte_t newpte;
+	newpte.trans.valid = 0;
+	newpte.trans.kind = kSoftPteKindTrans;
+	newpte.trans.pfn = pfn;
+	pte->u64 = newpte.u64;
+}
+
+static inline void
+vmp_pte_busy_create(pte_t *pte, struct vmp_pager_state *state)
+{
+	pte_t newpte;
+	newpte.busy.valid = 0;
+	newpte.busy.kind = kSoftPteKindBusy;
+	newpte.busy.state = ((uintptr_t)state) >> 3;
+	pte->u64 = newpte.u64;
 }
 
 static inline void
 vmp_pte_swap_create(pte_t *pte, uintptr_t drumslot)
 {
-	pte->swap.valid = 0;
-	pte->swap.kind = kSoftPteKindSwap;
-	pte->swap.drumslot = drumslot;
+	pte_t newpte;
+	newpte.swap.valid = 0;
+	newpte.swap.kind = kSoftPteKindSwap;
+	newpte.swap.drumslot = drumslot;
+	pte->u64 = newpte.u64;
 }
 
 static inline bool
@@ -150,6 +166,6 @@ vmp_addr_unpack(vaddr_t vaddr, int unpacked[5])
 }
 
 /* vmp_pager_state_t *vmp_pte_busy_state(pte_t *pte) */
-#define vmp_pte_busy_state(PTE) (vmp_pager_state_t *)(pte->trans.state << 4)
+#define vmp_pte_busy_state(PTE) (vmp_pager_state_t *)(pte->trans.state << 3)
 
 #endif /* KRX_VM_SOFT_H */

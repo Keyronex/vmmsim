@@ -66,6 +66,14 @@ typedef struct vm_vad {
 	vm_section_t *section;
 } vm_vad_t;
 
+typedef struct vmp_pagefile {
+	vnode_t *vnode;
+	uint8_t *bitmap;
+	size_t total_slots;
+	size_t free_slots;
+	size_t next_free;
+} vmp_pagefile_t;
+
 int vmp_page_alloc_locked(vm_page_t **out, enum vm_page_use use, bool must);
 vm_page_t *vmp_page_retain_locked(vm_page_t *page);
 void vmp_page_release_locked(vm_page_t *page);
@@ -188,5 +196,6 @@ extern kspinlock_t vmp_pfn_lock;
 extern kevent_t vmp_sufficient_pages_event;
 extern kevent_t vmp_pgwriter_event, vmp_balancer_event;
 extern vmp_page_queue_t free_pgq, standby_pgq, modified_pgq;
+extern vmp_pagefile_t vmp_pagefile;
 
 #endif /* KRX_VM_VMP_H */
