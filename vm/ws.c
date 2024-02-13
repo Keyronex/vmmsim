@@ -8,6 +8,7 @@ struct vmp_wsle {
 	TAILQ_ENTRY(vmp_wsle) queue_entry;
 	RB_ENTRY(vmp_wsle) rb_entry;
 	vaddr_t vaddr;
+	bool is_pagetable : 1;
 };
 
 static inline intptr_t
@@ -27,14 +28,11 @@ vmp_wsl_find(eprocess_t *ps, vaddr_t vaddr)
 }
 
 static void
-wsl_evict(eprocess_t *ps, pte_t *pte)
+wsl_evict(eprocess_t *ps, vm_page_t *page, pte_t *pte)
 {
-	vm_page_t *page = vmp_pte_hw_page(pte, 1);
-
 	switch (page->use) {
 	case kPageUseAnonPrivate: {
 		bool dirty = vmp_pte_hw_is_writeable(pte);
-		vm_page_t *page = vmp_pte_hw_page(pte, 1);
 		page->dirty |= dirty;
 		vmp_pte_trans_create(pte, vmp_pte_hw_pfn(pte, 1));
 		break;
@@ -63,6 +61,7 @@ wsl_trim_1(eprocess_t *ps)
 	struct vmp_wsle *wsle;
 	pte_t *pte;
 	int r;
+	vm_page_t *page;
 
 	wsle = TAILQ_FIRST(&ps->wsl.queue);
 	if (wsle == NULL)
@@ -71,13 +70,18 @@ wsl_trim_1(eprocess_t *ps)
 	TAILQ_REMOVE(&ps->wsl.queue, wsle, queue_entry);
 	RB_REMOVE(vmp_wsle_rb, &ps->wsl.tree, wsle);
 
-	kprintf("Evicting 0x%zx\n", wsle->vaddr);
+	kprintf("Evicting 0x%zx\n", (size_t)wsle->vaddr);
 	ps->wsl.nentries--;
 
-	if (wsle->vaddr > 0x1000 * 256)
-		kfatal("Need to handle this case! I.e. page table PTE\n");
-	vmp_fetch_pte(ps, wsle->vaddr, &pte);
-	wsl_evict(ps, pte);
+	if (!wsle->is_pagetable) {
+		vmp_fetch_pte(ps, wsle->vaddr, &pte);
+		page = vmp_pte_hw_page(pte, 1);
+	} else {
+		page = vmp_paddr_to_page(V2P(wsle->vaddr));
+		pte = (pte_t *)P2V(page->referent_pte);
+	}
+
+	wsl_evict(ps, page, pte);
 
 	return wsle;
 }
@@ -96,7 +100,7 @@ wsl_try_expand(eprocess_t *ps) LOCK_REQUIRES(ps->ws_lock)
 }
 
 void
-vmp_wsl_insert(eprocess_t *ps, vaddr_t vaddr, bool locked)
+vmp_wsl_insert(eprocess_t *ps, vaddr_t vaddr, bool is_pagetable, bool locked)
 {
 	struct vmp_wsle *wsle = NULL;
 
@@ -116,6 +120,7 @@ vmp_wsl_insert(eprocess_t *ps, vaddr_t vaddr, bool locked)
 		ps->wsl.nlocked++;
 
 	wsle->vaddr = vaddr;
+	wsle->is_pagetable = is_pagetable;
 
 	if (!locked)
 		TAILQ_INSERT_TAIL(&ps->wsl.queue, wsle, queue_entry);
@@ -174,10 +179,10 @@ vmp_wsl_dump(eprocess_t *ps)
 	kprintf("WSL: %zu entries\n%zu locked enties:\n", ps->wsl.nentries, ps->wsl.nlocked);
 	kprintf("All entries:\n");
 	RB_FOREACH (wsle, vmp_wsle_rb, &ps->wsl.tree) {
-		kprintf("- 0x%zx\n", wsle->vaddr);
+		kprintf("- 0x%zx\n", (size_t)wsle->vaddr);
 	}
 	kprintf("Dynamic Entries:\n");
 	TAILQ_FOREACH (wsle, &ps->wsl.queue, queue_entry) {
-		kprintf("- 0x%zx\n", wsle->vaddr);
+		kprintf("- 0x%zx\n", (size_t)wsle->vaddr);
 	}
 }

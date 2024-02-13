@@ -87,7 +87,7 @@ vm_page_t *vmp_paddr_to_page(paddr_t paddr);
  * @pre PFNDB lock held
  * @pre WS lock held
  */
-void vmp_wsl_insert(struct eprocess *ps, vaddr_t vaddr, bool locked)
+void vmp_wsl_insert(struct eprocess *ps, vaddr_t vaddr, bool is_pagetable, bool locked)
     LOCK_REQUIRES(ps->ws_lock) LOCK_REQUIRES(pfn_lock);
 /*!
  * @brief Remove one entry from a working set list.

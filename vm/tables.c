@@ -189,7 +189,7 @@ vmp_wire_pte(eprocess_t *ps, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 			vmp_page_retain_locked(page);
 			page->nonzero_ptes++;
 			page->nonswap_ptes++;
-			vmp_wsl_insert(ps, P2V(next_table_p), true);
+			vmp_wsl_insert(ps, P2V(next_table_p), true, true);
 
 			vmp_md_setup_table_pointers(ps, pages[level - 1], page,
 			    pte, false);
@@ -233,7 +233,7 @@ vmp_wire_pte(eprocess_t *ps, vaddr_t vaddr, struct vmp_pte_wire_state *state)
 			page->nonzero_ptes++;
 			page->nonswap_ptes++;
 			page->referent_pte = V2P(pte);
-			vmp_wsl_insert(ps, P2V(vmp_page_paddr(page)), true);
+			vmp_wsl_insert(ps, P2V(vmp_page_paddr(page)), true, true);
 
 			vmp_md_setup_table_pointers(ps, pages[level - 1], page,
 			    pte, true);

@@ -80,7 +80,7 @@ do_fault(vaddr_t vaddr, bool write, vm_mdl_t *out)
 			    write & vad->flags.writeable);
 			vmp_pagetable_page_nonswap_pte_created(ps,
 			    pte_state.pages[0], true);
-			vmp_wsl_insert(ps, vaddr, false);
+			vmp_wsl_insert(ps, vaddr, false, false);
 			page->referent_pte = V2P(pte_state.pte);
 
 			if (out != NULL) {
@@ -95,7 +95,7 @@ do_fault(vaddr_t vaddr, bool write, vm_mdl_t *out)
 		vm_page_t *page = vmp_pte_trans_page(pte_state.pte);
 		vmp_page_retain_locked(page);
 		vmp_pte_hw_create(pte_state.pte, page->pfn, false);
-		vmp_wsl_insert(ps, vaddr, false);
+		vmp_wsl_insert(ps, vaddr, false, false);
 		if (out != NULL && !write) {
 			vmp_page_retain_locked(page);
 			out->pages[out->offset / PGSIZE] = page;
@@ -132,7 +132,7 @@ do_fault(vaddr_t vaddr, bool write, vm_mdl_t *out)
 		vmp_pte_busy_create(pte_state.pte, pager_state);
 		vmp_pagetable_page_nonswap_pte_created(ps, pte_state.pages[0],
 		    false);
-		vmp_wsl_insert(ps, vaddr, true);
+		vmp_wsl_insert(ps, vaddr, false, true);
 
 		vmp_pte_wire_state_release(&pte_state);
 		vmp_release_pfn_lock(ipl);

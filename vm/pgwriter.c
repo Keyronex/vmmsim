@@ -94,7 +94,7 @@ cluster_anon(vm_mdl_t *mdl, iop_t *iop, vm_page_t *page)
 	mdl->nentries = 1;
 	mdl->pages[0] = page;
 
-	kprintf("Paging out %lu\n", page->pfn);
+	kprintf("Paging out %zu\n", (size_t)page->pfn);
 	iop_init_vnode_write(iop, vmp_pagefile.vnode, mdl, PGSIZE,
 	    page->drumslot * PGSIZE);
 
