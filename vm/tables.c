@@ -79,6 +79,14 @@ vmp_pagetable_page_pte_deleted(struct eprocess *ps, vm_page_t *page,
 	vmp_page_release_locked(page);
 }
 
+/*! @brief Convert the PTEs pointing to page table \p dirpage to trans PTEs. */
+void
+vmp_md_transition_table_pointers(struct eprocess *ps, vm_page_t *dirpage,
+    vm_page_t *tablepage)
+{
+	kfatal("Implement me!\n");
+}
+
 static void
 vmp_md_delete_table_pointers(struct eprocess *ps, vm_page_t *dirpage,
     pte_t *dirpte)

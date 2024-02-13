@@ -108,13 +108,20 @@ main(int argc, char *arv[])
 	vaddr_t vaddr = 0x0;
 	vm_ps_allocate(&kernel_ps, &vaddr, 4294967296 * 32, true);
 
-#if 1
+#if 0
 	for (int i = 0; i < 10; i++) {
 		for (int j = 0; j < 9; j++) {
 			bool write = true;
 			access(PGSIZE * j, write);
 			access(4294967296 + PGSIZE * j, write);
 			access(4294967296 * 2 + PGSIZE * j, write);
+		}
+	}
+#else
+	for (int i = 0; i < 10; i++) {
+		for (int j = 0; j < 15; j++) {
+			bool write = true;
+			access((4294967296 * i) + PGSIZE * j, write);
 		}
 	}
 #endif

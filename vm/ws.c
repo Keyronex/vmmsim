@@ -1,6 +1,7 @@
 #include <kdk/executive.h>
 
 #include "defs.h"
+#include "vm.h"
 #include "vmp.h"
 
 struct vmp_wsle {
@@ -28,15 +29,25 @@ vmp_wsl_find(eprocess_t *ps, vaddr_t vaddr)
 static void
 wsl_evict(eprocess_t *ps, pte_t *pte)
 {
-	bool dirty = vmp_pte_hw_is_writeable(pte);
 	vm_page_t *page = vmp_pte_hw_page(pte, 1);
-
-	page->dirty |= dirty;
 
 	switch (page->use) {
 	case kPageUseAnonPrivate: {
+		bool dirty = vmp_pte_hw_is_writeable(pte);
+		vm_page_t *page = vmp_pte_hw_page(pte, 1);
+		page->dirty |= dirty;
 		vmp_pte_trans_create(pte, vmp_pte_hw_pfn(pte, 1));
 		break;
+	}
+
+	case kPageUsePML1:
+	case kPageUsePML2:
+	case kPageUsePML3:
+	case kPageUsePML4: {
+		int level = page->use - (kPageUsePML1 - 1);
+		vm_page_t *dirpage = vmp_paddr_to_page(V2P(pte));
+		vmp_md_transition_table_pointers(ps, dirpage, page);
+		kfatal("Implement pagetable eviction!\n");
 	}
 
 	default:
@@ -63,6 +74,8 @@ wsl_trim_1(eprocess_t *ps)
 	kprintf("Evicting 0x%zx\n", wsle->vaddr);
 	ps->wsl.nentries--;
 
+	if (wsle->vaddr > 0x1000 * 256)
+		kfatal("Need to handle this case! I.e. page table PTE\n");
 	vmp_fetch_pte(ps, wsle->vaddr, &pte);
 	wsl_evict(ps, pte);
 

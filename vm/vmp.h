@@ -142,6 +142,10 @@ void vmp_pagetable_page_nonswap_pte_created(struct eprocess *ps,
     vm_page_t *page, bool is_new) LOCK_REQUIRES(ps->ws_lock)
     LOCK_REQUIRES(pfn_lock);
 
+/*! @brief Convert the PTEs pointing to page table \p dirpage to trans PTEs. */
+void vmp_md_transition_table_pointers(struct eprocess *ps, vm_page_t *dirpage,
+    vm_page_t *tablepage);
+
 /*!
  * @brief Update pagetable page after nonswap PTE became swap.
  *
@@ -167,6 +171,9 @@ int vm_ps_map_section_view(struct eprocess *ps, void *section, vaddr_t *vaddrp,
 /* paddr_t vmp_pte_hw_paddr(pte_t *pte, int level) */
 #define vmp_pte_hw_paddr(PTE, LVL) vmp_pfn_to_paddr(vmp_pte_hw_pfn(PTE, LVL))
 
+/* NOTE: we require that we can always get to the *page* this way, regardless of
+ * level, even though on e.g. 68040 the root and 2nd levels have a more specific
+ * pointer in their PTEs */
 /* vm_page_t *vmp_pte_hw_page(pte_t *pte, int level) */
 #define vmp_pte_hw_page(PTE, LVL) vmp_paddr_to_page(vmp_pte_hw_paddr(PTE, LVL))
 
